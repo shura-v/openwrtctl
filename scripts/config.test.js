@@ -11,6 +11,9 @@ adguard:
   rewriteIp: 94.183.189.30
   querylogInterval: 6h
   webPort: 8080
+  upstreamDns: [https://cloudflare-dns.com/dns-query, tls://common.dot.dns.yandex.net]
+  bootstrapDns: [1.1.1.1, 77.88.8.8]
+  upstreamMode: load_balance
 singboxctl:
   profile: router
   ruleSetsDirectory: ./rule-sets
@@ -39,7 +42,13 @@ test("parses the OpenWrt project config", () => {
     adguard: {
       rewriteIp: "94.183.189.30",
       querylogInterval: "6h",
-      webPort: 8080
+      webPort: 8080,
+      upstreamDns: [
+        "https://cloudflare-dns.com/dns-query",
+        "tls://common.dot.dns.yandex.net"
+      ],
+      bootstrapDns: ["1.1.1.1", "77.88.8.8"],
+      upstreamMode: "load_balance"
     },
     singboxctl: {
       profile: "router",
@@ -67,6 +76,40 @@ test("parses the OpenWrt project config", () => {
 });
 
 test("rejects invalid project config values", () => {
+  assert.throws(
+    () =>
+      parseProjectConfig(
+        CONFIG.replace(
+          "upstreamDns: [https://cloudflare-dns.com/dns-query, tls://common.dot.dns.yandex.net]",
+          "upstreamDns: []"
+        ),
+        "/project/config.yaml"
+      ),
+    /adguard\.upstreamDns/u
+  );
+  assert.throws(
+    () =>
+      parseProjectConfig(
+        CONFIG.replace("bootstrapDns: [1.1.1.1, 77.88.8.8]", "bootstrapDns: [1.1.1.1, 53]"),
+        "/project/config.yaml"
+      ),
+    /adguard\.bootstrapDns/u
+  );
+  assert.deepEqual(
+    parseProjectConfig(
+      CONFIG.replace("bootstrapDns: [1.1.1.1, 77.88.8.8]", "bootstrapDns: []"),
+      "/project/config.yaml"
+    ).adguard.bootstrapDns,
+    []
+  );
+  assert.throws(
+    () =>
+      parseProjectConfig(
+        CONFIG.replace("upstreamMode: load_balance", "upstreamMode: random"),
+        "/project/config.yaml"
+      ),
+    /adguard\.upstreamMode/u
+  );
   assert.throws(
     () =>
       parseProjectConfig(

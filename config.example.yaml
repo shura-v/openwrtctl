@@ -7,6 +7,11 @@ adguard:
   rewriteIp: 192.0.2.10
   querylogInterval: 6h
   webPort: 8080
+  upstreamDns:
+    - https://cloudflare-dns.com/dns-query
+    - tls://common.dot.dns.yandex.net
+  bootstrapDns: [1.1.1.1, 1.0.0.1, 77.88.8.8, 77.88.8.1]
+  upstreamMode: load_balance
 
 singboxctl:
   profile: router

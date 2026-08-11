@@ -5,8 +5,6 @@ import path from "node:path";
 import test from "node:test";
 import { parse } from "yaml";
 import {
-  ADGUARD_BOOTSTRAP_DNS,
-  ADGUARD_UPSTREAM_DNS,
   buildAdguardRewrites,
   patchAdguardConfig
 } from "./adguard-config.js";
@@ -52,7 +50,18 @@ http:
   address: 0.0.0.0:3000
 `;
 
-  const result = parse(patchAdguardConfig(source, rewrites, "6h", "8080"));
+  const upstreamDns = ["tls://dns.example"];
+  const bootstrapDns = ["192.0.2.54"];
+  const result = parse(
+    patchAdguardConfig(source, {
+      rewrites,
+      querylogInterval: "6h",
+      webPort: "8080",
+      upstreamDns,
+      bootstrapDns,
+      upstreamMode: "fastest_addr"
+    })
+  );
 
   assert.deepEqual(result.users, [{ name: "admin", password: "preserved-hash" }]);
   assert.equal(result.dns.cache_size, 1234);
@@ -60,20 +69,36 @@ http:
   assert.equal(result.querylog.interval, "6h");
   assert.equal(result.querylog.size_memory, 1000);
   assert.equal(result.http.address, "0.0.0.0:8080");
-  assert.deepEqual(result.dns.upstream_dns, ADGUARD_UPSTREAM_DNS);
-  assert.deepEqual(result.dns.bootstrap_dns, ADGUARD_BOOTSTRAP_DNS);
-  assert.equal(result.dns.upstream_mode, "load_balance");
+  assert.deepEqual(result.dns.upstream_dns, upstreamDns);
+  assert.deepEqual(result.dns.bootstrap_dns, bootstrapDns);
+  assert.equal(result.dns.upstream_mode, "fastest_addr");
   assert.deepEqual(result.filtering.rewrites, [
     { domain: "*.suffix.example", answer: "192.0.2.10", enabled: true },
     { domain: "exact.example", answer: "192.0.2.10", enabled: true },
     { domain: "suffix.example", answer: "192.0.2.10", enabled: true }
   ]);
   assert.throws(
-    () => patchAdguardConfig(source, rewrites, "six-hours", "8080"),
+    () =>
+      patchAdguardConfig(source, {
+        rewrites,
+        querylogInterval: "six-hours",
+        webPort: "8080",
+        upstreamDns,
+        bootstrapDns,
+        upstreamMode: "load_balance"
+      }),
     /ADGUARD_QUERYLOG_INTERVAL/u
   );
   assert.throws(
-    () => patchAdguardConfig(source, rewrites, "6h", "70000"),
+    () =>
+      patchAdguardConfig(source, {
+        rewrites,
+        querylogInterval: "6h",
+        webPort: "70000",
+        upstreamDns,
+        bootstrapDns,
+        upstreamMode: "load_balance"
+      }),
     /ADGUARD_WEB_PORT/u
   );
 });
