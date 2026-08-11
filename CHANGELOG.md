@@ -1,5 +1,13 @@
 # openwrtctl
 
+## 0.3.0
+
+### Minor Changes
+
+- 9816be3: Configure AdGuard Home upstream DNS servers, bootstrap DNS servers, and upstream mode through `config.yaml`.
+
+  Existing configurations must add `adguard.upstreamDns`, `adguard.bootstrapDns`, and `adguard.upstreamMode` before upgrading.
+
 ## 0.2.0
 
 ### Minor Changes
