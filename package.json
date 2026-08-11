@@ -27,6 +27,7 @@
   "scripts": {
     "changeset": "changeset",
     "init": "node ./bin/openwrtctl.js init",
+    "doctor": "node ./bin/openwrtctl.js doctor",
     "backup": "node ./bin/openwrtctl.js backup",
     "prepare-router": "node ./bin/openwrtctl.js prepare-router",
     "restore": "node ./bin/openwrtctl.js restore",

@@ -15,6 +15,7 @@ test("exposes the complete openwrtctl command surface", async () => {
 
   for (const command of [
     "init",
+    "doctor",
     "prepare-router",
     "backup",
     "restore",

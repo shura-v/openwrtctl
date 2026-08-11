@@ -43,6 +43,14 @@ openwrtctl install-nfqws2
 openwrtctl sync
 ```
 
+Для быстрой read-only проверки роутера используйте `doctor`. Команда показывает
+модель, версию OpenWrt, uptime, источник и свободное место overlay, а также
+состояние AdGuard Home, sing-box и zapret2:
+
+```sh
+openwrtctl doctor
+```
+
 Команды по умолчанию читают `~/.config/openwrtctl/config.yaml`. Опция
 `--config /path/to/config.yaml` позволяет явно выбрать другой файл.
 

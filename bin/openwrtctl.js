@@ -12,6 +12,7 @@ const rootDirectory = path.resolve(
 
 const COMMANDS = new Map([
   ["init", ["init.js"]],
+  ["doctor", ["doctor.js"]],
   ["backup", ["backup.js"]],
   ["prepare", ["prepare.js"]],
   ["prepare-router", ["prepare.js"]],
@@ -96,7 +97,7 @@ function printHelp() {
   console.log(`Usage: openwrtctl [--config <path>] <command> [arguments]
 
 Commands:
-  init                backup              restore             prepare-router
+  init                doctor              backup              restore             prepare-router
   install-adguard     uninstall-adguard     sync-adguard
   install-singbox     disable-singbox       update-singbox        uninstall-singbox     sync-singbox
   install-nfqws2      disable-nfqws2        update-nfqws2         uninstall-nfqws2      sync-nfqws2
