@@ -1,0 +1,43 @@
+openwrt:
+  endpoint: root@192.168.1.1
+  sshPort: 22
+  remoteTmpDir: /root/tmp
+
+adguard:
+  rewriteIp: 192.0.2.10
+  querylogInterval: 6h
+  webPort: 8080
+
+singboxctl:
+  profile: router
+  ruleSetsDirectory: ~/.config/singboxctl/rule-sets
+
+backup:
+  directory: ~/backups/openwrt
+
+nfqws2:
+  filter:
+    tcp: [443, 80, 1984, 5222]
+    udp: [590-600, 1400, 3478-3481, 5349, 19294-19344, 20000-30000, 49152-65535]
+  filterL7:
+    tcp: [http, tls, mtproto]
+    udp: [wireguard, stun, discord, mtproto, unknown]
+  strategy:
+    http: |-
+      --payload=http_req
+      --lua-desync=http_methodeol:badsum
+    https: |-
+      --lua-desync=wssize:wsize=1:scale=6 --payload=tls_client_hello --lua-desync=multidisorder:pos=midsld
+      --lua-desync=wssize:wsize=1:scale=6 --payload=tls_client_hello --lua-desync=multidisorder:pos=1,midsld
+      --lua-desync=wssize:wsize=1:scale=6 --payload=tls_client_hello --lua-desync=multidisorder:pos=1,midsld,1220
+      --lua-desync=wssize:wsize=1:scale=6 --payload=tls_client_hello --lua-desync=multidisorder:pos=1,sniext+1,host+1,midsld-2,midsld,midsld+2,endhost-1
+      --lua-desync=wssize:wsize=1:scale=6 --payload=tls_client_hello --lua-desync=multisplit:pos=10,midsld:seqovl=1
+      --lua-desync=wssize:wsize=1:scale=6 --payload=tls_client_hello --lua-desync=multidisorder:pos=midsld:seqovl=midsld-1
+      --lua-desync=wssize:wsize=1:scale=6 --payload=tls_client_hello --lua-desync=multidisorder:pos=2,midsld:seqovl=1
+      --lua-init=fake_default_tls=tls_mod(fake_default_tls,'rnd') --lua-desync=wssize:wsize=1:scale=6 --payload=tls_client_hello --lua-desync=multidisorder:pos=2,midsld:seqovl=1:seqovl_pattern=fake_default_tls
+    udp: |-
+      --out-range=<n2
+      --payload=wireguard_initiation,wireguard_response,wireguard_cookie,stun,discord_ip_discovery,mtproto_initial,unknown
+      --lua-desync=circular:fails=2:time=300:retrans=3:nld=2
+      --lua-desync=fake:repeats=6:strategy=1
+      --lua-desync=fake:blob=quic_initial:repeats=6:strategy=2

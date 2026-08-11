@@ -1,0 +1,9 @@
+chain block_quic_prerouting {
+	type filter hook prerouting priority raw - 1; policy accept;
+	iifname $lan_devices udp dport 443 counter reject with icmpx type port-unreachable comment "!openwrt-router-tools: Block QUIC from LAN before TUN routing"
+}
+
+chain block_quic_output {
+	type filter hook output priority raw - 1; policy accept;
+	udp dport 443 counter reject with icmpx type port-unreachable comment "!openwrt-router-tools: Block QUIC from router"
+}

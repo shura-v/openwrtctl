@@ -1,0 +1,38 @@
+{
+  "name": "openwrtctl",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.17"
+  },
+  "bin": {
+    "openwrtctl": "./bin/openwrtctl.js"
+  },
+  "scripts": {
+    "init": "node ./bin/openwrtctl.js init",
+    "backup": "node ./bin/openwrtctl.js backup",
+    "prepare-router": "node ./bin/openwrtctl.js prepare-router",
+    "restore": "node ./bin/openwrtctl.js restore",
+    "install-adguard": "node ./bin/openwrtctl.js install-adguard",
+    "uninstall-adguard": "node ./bin/openwrtctl.js uninstall-adguard",
+    "install-singbox": "node ./bin/openwrtctl.js install-singbox",
+    "disable-singbox": "node ./bin/openwrtctl.js disable-singbox",
+    "update-singbox": "node ./bin/openwrtctl.js update-singbox",
+    "uninstall-singbox": "node ./bin/openwrtctl.js uninstall-singbox",
+    "install-nfqws2": "node ./bin/openwrtctl.js install-nfqws2",
+    "disable-nfqws2": "node ./bin/openwrtctl.js disable-nfqws2",
+    "update-nfqws2": "node ./bin/openwrtctl.js update-nfqws2",
+    "uninstall-nfqws2": "node ./bin/openwrtctl.js uninstall-nfqws2",
+    "sync-adguard": "node ./bin/openwrtctl.js sync-adguard",
+    "sync-singbox": "node ./bin/openwrtctl.js sync-singbox",
+    "sync-nfqws2": "node ./bin/openwrtctl.js sync-nfqws2",
+    "sync": "node ./bin/openwrtctl.js sync",
+    "test": "node --test scripts/*.test.js"
+  },
+  "dependencies": {
+    "singboxctl": "^0.4.0",
+    "yaml": "^2.9.0",
+    "zx": "^8.8.5"
+  }
+}
