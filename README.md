@@ -30,8 +30,10 @@ openwrtctl init
 
 `init` создаёт `~/.config/openwrtctl/config.yaml` из шаблона, выставляет права
 `0600` и сохраняет существующий файл без изменений. Заполните endpoint, AdGuard
-rewrite IP, профиль и каталог rule sets. Относительные пути разрешаются от
-каталога выбранного config-файла.
+rewrite IP и DNS-настройки, профиль и каталог rule sets. `adguard.upstreamDns`,
+`adguard.bootstrapDns` и `adguard.upstreamMode` управляют соответствующими полями
+`dns.*` в AdGuard Home. Относительные пути разрешаются от каталога выбранного
+config-файла.
 
 ## Использование
 

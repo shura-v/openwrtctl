@@ -43,6 +43,9 @@ export function parseProjectConfig(sourceYaml, sourcePath = "config.yaml") {
   const rewriteIp = source.adguard.rewriteIp;
   const querylogInterval = source.adguard.querylogInterval;
   const webPort = source.adguard.webPort;
+  const upstreamDns = source.adguard.upstreamDns;
+  const bootstrapDns = source.adguard.bootstrapDns;
+  const upstreamMode = source.adguard.upstreamMode;
   const filter = source.nfqws2.filter;
   const filterL7 = source.nfqws2.filterL7;
   const strategy = source.nfqws2.strategy;
@@ -73,6 +76,21 @@ export function parseProjectConfig(sourceYaml, sourcePath = "config.yaml") {
   }
 
   validatePort(webPort, `${sourcePath}: adguard.webPort`);
+  const validatedUpstreamDns = validateStringList(
+    upstreamDns,
+    `${sourcePath}: adguard.upstreamDns`
+  );
+  const validatedBootstrapDns = validateStringList(
+    bootstrapDns,
+    `${sourcePath}: adguard.bootstrapDns`,
+    true
+  );
+
+  if (!["load_balance", "parallel", "fastest_addr"].includes(upstreamMode)) {
+    throw new Error(
+      `${sourcePath}: adguard.upstreamMode must be load_balance, parallel, or fastest_addr`
+    );
+  }
 
   if (typeof profile !== "string" || !/^[\w.-]+$/u.test(profile)) {
     throw new Error(`${sourcePath}: singboxctl.profile must be a profile name`);
@@ -108,7 +126,14 @@ export function parseProjectConfig(sourceYaml, sourcePath = "config.yaml") {
 
   return {
     openwrt: { endpoint, sshPort, remoteTmpDir },
-    adguard: { rewriteIp, querylogInterval, webPort },
+    adguard: {
+      rewriteIp,
+      querylogInterval,
+      webPort,
+      upstreamDns: validatedUpstreamDns,
+      bootstrapDns: validatedBootstrapDns,
+      upstreamMode
+    },
     singboxctl: {
       profile,
       ruleSetsDirectory: resolveConfigPath(ruleSetsDirectory, sourcePath)
@@ -156,6 +181,20 @@ function validatePortFilter(value, fieldName, allowRanges = false) {
 
     return normalized;
   });
+}
+
+function validateStringList(value, fieldName, allowEmpty = false) {
+  if (
+    !Array.isArray(value) ||
+    (!allowEmpty && value.length === 0) ||
+    value.some((entry) => typeof entry !== "string" || entry.trim().length === 0)
+  ) {
+    throw new Error(
+      `${fieldName} must be ${allowEmpty ? "a list" : "a non-empty list"} of non-empty strings`
+    );
+  }
+
+  return [...value];
 }
 
 function validateNameList(value, fieldName) {

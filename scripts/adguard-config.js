@@ -6,12 +6,6 @@ import { fileURLToPath } from "node:url";
 import { parse, parseDocument } from "yaml";
 import { loadRouterResources } from "./lib/router-resources.js";
 
-export const ADGUARD_UPSTREAM_DNS = [
-  "https://cloudflare-dns.com/dns-query",
-  "https://dns.google/dns-query"
-];
-export const ADGUARD_BOOTSTRAP_DNS = ["1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4"];
-
 export function buildAdguardRewrites(resources, rewriteIp) {
   if (isIP(rewriteIp) === 0) {
     throw new Error(`ADGUARD_REWRITE_IP must be an IP address: ${JSON.stringify(rewriteIp)}`);
@@ -38,7 +32,14 @@ export function buildAdguardRewrites(resources, rewriteIp) {
   return [...rewrites.values()].sort((left, right) => left.domain.localeCompare(right.domain));
 }
 
-export function patchAdguardConfig(sourceYaml, rewrites, querylogInterval, webPort) {
+export function patchAdguardConfig(sourceYaml, {
+  rewrites,
+  querylogInterval,
+  webPort,
+  upstreamDns,
+  bootstrapDns,
+  upstreamMode
+}) {
   if (!/^[1-9]\d*(?:h|d)$/u.test(querylogInterval)) {
     throw new Error(
       `ADGUARD_QUERYLOG_INTERVAL must be a positive number of hours or days: ${JSON.stringify(querylogInterval)}`
@@ -72,9 +73,9 @@ export function patchAdguardConfig(sourceYaml, rewrites, querylogInterval, webPo
     throw new Error(`AdGuard Home http.address must include a port: ${JSON.stringify(currentWebAddress)}`);
   }
 
-  document.setIn(["dns", "upstream_dns"], ADGUARD_UPSTREAM_DNS);
-  document.setIn(["dns", "bootstrap_dns"], ADGUARD_BOOTSTRAP_DNS);
-  document.setIn(["dns", "upstream_mode"], "load_balance");
+  document.setIn(["dns", "upstream_dns"], upstreamDns);
+  document.setIn(["dns", "bootstrap_dns"], bootstrapDns);
+  document.setIn(["dns", "upstream_mode"], upstreamMode);
   document.setIn(["filtering", "rewrites"], rewrites);
   document.setIn(["querylog", "interval"], querylogInterval);
   document.setIn(["http", "address"], replaceAddressPort(currentWebAddress, webPort));
@@ -91,16 +92,21 @@ export async function generateAdguardConfig({
   rewriteIp,
   querylogInterval,
   webPort,
+  upstreamDns,
+  bootstrapDns,
+  upstreamMode,
   outputPath
 }) {
   const resources = await loadRouterResources(singBoxConfigPath, ruleSetsDirectoryPath);
   const rewrites = buildAdguardRewrites(resources, rewriteIp);
-  const patchedYaml = patchAdguardConfig(
-    await readFile(sourcePath, "utf8"),
+  const patchedYaml = patchAdguardConfig(await readFile(sourcePath, "utf8"), {
     rewrites,
     querylogInterval,
-    webPort
-  );
+    webPort,
+    upstreamDns,
+    bootstrapDns,
+    upstreamMode
+  });
   await writeFile(outputPath, patchedYaml, { encoding: "utf8", mode: 0o600 });
   console.log(`Patched AdGuard Home config: ${resources.length} router resources, ${rewrites.length} rewrites`);
 }
@@ -113,6 +119,9 @@ async function main() {
     rewriteIp,
     querylogInterval,
     webPort,
+    upstreamDnsJson,
+    bootstrapDnsJson,
+    upstreamMode,
     outputPath
   ] = process.argv.slice(2);
 
@@ -123,10 +132,13 @@ async function main() {
     !rewriteIp ||
     !querylogInterval ||
     !webPort ||
+    !upstreamDnsJson ||
+    !bootstrapDnsJson ||
+    !upstreamMode ||
     !outputPath
   ) {
     throw new Error(
-      "Usage: adguard-config.js <source-yaml> <sing-box-config> <rule-sets-directory> <rewrite-ip> <querylog-interval> <web-port> <output-yaml>"
+      "Usage: adguard-config.js <source-yaml> <sing-box-config> <rule-sets-directory> <rewrite-ip> <querylog-interval> <web-port> <upstream-dns-json> <bootstrap-dns-json> <upstream-mode> <output-yaml>"
     );
   }
 
@@ -137,6 +149,9 @@ async function main() {
     rewriteIp,
     querylogInterval,
     webPort,
+    upstreamDns: JSON.parse(upstreamDnsJson),
+    bootstrapDns: JSON.parse(bootstrapDnsJson),
+    upstreamMode,
     outputPath
   });
 }

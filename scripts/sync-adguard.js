@@ -41,6 +41,9 @@ async function main() {
       rewriteIp: remote.config.adguard.rewriteIp,
       querylogInterval: remote.config.adguard.querylogInterval,
       webPort: String(remote.config.adguard.webPort),
+      upstreamDns: remote.config.adguard.upstreamDns,
+      bootstrapDns: remote.config.adguard.bootstrapDns,
+      upstreamMode: remote.config.adguard.upstreamMode,
       outputPath: patchedConfigPath
     });
     await remote.push(patchedConfigPath, remoteStagedConfigPath);
