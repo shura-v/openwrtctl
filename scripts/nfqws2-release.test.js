@@ -57,7 +57,7 @@ test("derives transfer checksums from a cached concrete release", async (context
   assert.equal(prepared.archivePath, archivePath);
   assert.match(prepared.release.archiveSha256, /^[a-f0-9]{64}$/u);
   assert.equal(
-    prepared.release.binarySha256,
+    prepared.release.binarySha256ByTarget.arm64,
     "a8b077366207a4f60b23396338f9e2d65007c87d49e7bcc1f8f7d18db947d085"
   );
 });
@@ -95,13 +95,17 @@ test("uploads the local archive before running the router installer", async () =
   assert.deepEqual(calls[2], ["exec", `rm -f '${remoteArchivePath}'`]);
 });
 
-test("prepares the complete arm64 target before moving it into place", () => {
+test("selects the zapret2 binary from the OpenWrt architecture", () => {
   const command = buildRemoteInstallCommand("/root/tmp/zapret2.tar.gz");
   const markerIndex = command.indexOf('"$source_dir/.openwrt-router-tools-version"');
   const moveIndex = command.indexOf('mv "$source_dir" "$target"');
 
-  assert.match(command, /binaries\/linux-arm64\/nfqws2/u);
-  assert.match(command, new RegExp(NFQWS2_RELEASE.binarySha256, "u"));
+  assert.match(command, /openwrt_arch="\$\(apk --print-arch\)"/u);
+  assert.match(command, /aarch64\*\) binary_target=arm64/u);
+  assert.match(command, /x86_64\*\) binary_target=x86_64/u);
+  assert.match(command, /mipsel\*\) binary_target=mipsel/u);
+  assert.match(command, /binaries\/linux-\$binary_target/u);
+  assert.match(command, new RegExp(NFQWS2_RELEASE.binarySha256ByTarget.arm64, "u"));
   assert.match(
     command,
     /cp "\$source_dir\/config\.default" "\$source_dir\/config"/u
@@ -136,7 +140,7 @@ test("installs the explicitly selected release", () => {
   const release = {
     ...createNfqws2Release("1.0.3"),
     archiveSha256: "a".repeat(64),
-    binarySha256: "b".repeat(64)
+    binarySha256ByTarget: { arm64: "b".repeat(64) }
   };
   const command = buildRemoteInstallCommand(
     "/root/tmp/zapret2-release.tar.gz",

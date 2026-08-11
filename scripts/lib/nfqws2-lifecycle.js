@@ -1,5 +1,6 @@
 import path from "node:path";
 import { NFQWS2_RELEASE } from "./nfqws2-release.js";
+import { buildRemoteNfqws2ArchitectureSelection } from "./nfqws2-architecture.js";
 
 export async function updateNfqws2Release(
   remote,
@@ -32,6 +33,7 @@ export function buildRemoteUpdateCommand(
     path.posix.dirname(remoteArchivePath),
     "zapret2-update"
   );
+  const architectureSelection = buildRemoteNfqws2ArchitectureSelection(release);
 
   return `
 set -eu
@@ -43,7 +45,6 @@ previous="$stage/previous"
 failed="$stage/failed"
 target=/opt/zapret2
 expected_archive_sha256=${release.archiveSha256}
-expected_binary_sha256=${release.binarySha256}
 
 [ -f "$target/.openwrt-router-tools-version" ] || {
   echo "managed nfqws2 installation is missing; run install-nfqws2" >&2
@@ -55,19 +56,15 @@ actual_archive_sha256="$(sha256sum "$archive" | cut -d ' ' -f 1)"
   echo "zapret2 archive checksum mismatch" >&2
   exit 1
 }
-[ "$(uname -m)" = "aarch64" ] || {
-  echo "unsupported router architecture: $(uname -m)" >&2
-  exit 1
-}
-
 rm -rf "$stage"
 mkdir -p "$stage"
 tar -xzf "$archive" -C "$stage"
-[ -x "$source_dir/binaries/linux-arm64/nfqws2" ] || {
-  echo "linux-arm64/nfqws2 is missing from the release" >&2
+${architectureSelection}
+[ -x "$binary_dir/nfqws2" ] || {
+  echo "linux-$binary_target/nfqws2 is missing from the release" >&2
   exit 1
 }
-actual_binary_sha256="$(sha256sum "$source_dir/binaries/linux-arm64/nfqws2" | cut -d ' ' -f 1)"
+actual_binary_sha256="$(sha256sum "$binary_dir/nfqws2" | cut -d ' ' -f 1)"
 [ "$actual_binary_sha256" = "$expected_binary_sha256" ] || {
   echo "nfqws2 binary checksum mismatch" >&2
   exit 1
@@ -75,9 +72,9 @@ actual_binary_sha256="$(sha256sum "$source_dir/binaries/linux-arm64/nfqws2" | cu
 
 mkdir -p "$source_dir/nfq2" "$source_dir/ip2net" "$source_dir/mdig" \
   "$source_dir/init.d/openwrt/custom.d" "$source_dir/tmp"
-ln -s ../binaries/linux-arm64/nfqws2 "$source_dir/nfq2/nfqws2"
-ln -s ../binaries/linux-arm64/ip2net "$source_dir/ip2net/ip2net"
-ln -s ../binaries/linux-arm64/mdig "$source_dir/mdig/mdig"
+ln -s "../binaries/linux-$binary_target/nfqws2" "$source_dir/nfq2/nfqws2"
+ln -s "../binaries/linux-$binary_target/ip2net" "$source_dir/ip2net/ip2net"
+ln -s "../binaries/linux-$binary_target/mdig" "$source_dir/mdig/mdig"
 cp "$target/config" "$source_dir/config"
 touch "$source_dir/ipset/zapret-hosts-user.txt"
 touch "$source_dir/ipset/zapret-hosts-user-ipban.txt"

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { $ } from "zx";
+import { CONFIG_PATH, USER_HOME } from "../scripts/lib/config-path.js";
 
 const rootDirectory = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -78,15 +78,15 @@ function takeConfigPath(arguments_) {
   }
 
   if (!configuredPath) {
-    return path.resolve(process.cwd(), "config.yaml");
+    return CONFIG_PATH;
   }
 
   if (configuredPath === "~") {
-    return os.homedir();
+    return USER_HOME;
   }
 
   if (configuredPath.startsWith("~/")) {
-    return path.join(os.homedir(), configuredPath.slice(2));
+    return path.join(USER_HOME, configuredPath.slice(2));
   }
 
   return path.resolve(configuredPath);

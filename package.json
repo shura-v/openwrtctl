@@ -1,15 +1,31 @@
 {
   "name": "openwrtctl",
   "version": "0.1.0",
-  "private": true,
+  "description": "CLI for managing AdGuard Home, sing-box, and nfqws2 on OpenWrt routers",
+  "author": "Shura Vlasov",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shura-v/openwrtctl.git"
+  },
+  "homepage": "https://github.com/shura-v/openwrtctl#readme",
+  "bugs": "https://github.com/shura-v/openwrtctl/issues",
+  "files": [
+    "bin",
+    "scripts/**/*.js",
+    "!scripts/**/*.test.js",
+    "files",
+    "config.example.yaml"
+  ],
   "type": "module",
   "engines": {
     "node": ">=22.17"
   },
   "bin": {
-    "openwrtctl": "./bin/openwrtctl.js"
+    "openwrtctl": "bin/openwrtctl.js"
   },
   "scripts": {
+    "changeset": "changeset",
     "init": "node ./bin/openwrtctl.js init",
     "backup": "node ./bin/openwrtctl.js backup",
     "prepare-router": "node ./bin/openwrtctl.js prepare-router",
@@ -28,11 +44,16 @@
     "sync-singbox": "node ./bin/openwrtctl.js sync-singbox",
     "sync-nfqws2": "node ./bin/openwrtctl.js sync-nfqws2",
     "sync": "node ./bin/openwrtctl.js sync",
-    "test": "node --test scripts/*.test.js"
+    "test": "node --test scripts/*.test.js",
+    "version-packages": "changeset version && npm install --package-lock-only",
+    "release": "changeset publish"
   },
   "dependencies": {
     "singboxctl": "^0.4.0",
     "yaml": "^2.9.0",
     "zx": "^8.8.5"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.31.1"
   }
 }
