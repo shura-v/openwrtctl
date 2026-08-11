@@ -1,7 +1,7 @@
 openwrt:
   endpoint: root@192.168.1.1
   sshPort: 22
-  remoteTmpDir: /root/tmp
+  remoteTmpDir: /tmp/openwrtctl
 
 adguard:
   rewriteIp: 192.0.2.10

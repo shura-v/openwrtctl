@@ -23,10 +23,12 @@ export async function createRemote() {
   ];
   const rsyncShell = `ssh -p ${config.openwrt.sshPort} -o BatchMode=yes -o ConnectTimeout=10`;
   const run = $({ verbose: true, stdio: "inherit" });
+  const report = $({ verbose: false, stdio: "inherit" });
   const check = $({ quiet: true, nothrow: true });
 
-  async function exec(command) {
-    await run`ssh ${sshArguments} ${config.openwrt.endpoint} ${command}`;
+  async function exec(command, { verbose = true } = {}) {
+    const execute = verbose ? run : report;
+    await execute`ssh ${sshArguments} ${config.openwrt.endpoint} ${command}`;
   }
 
   async function requireRsync() {
