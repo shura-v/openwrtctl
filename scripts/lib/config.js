@@ -9,7 +9,7 @@ export async function loadProjectConfig(configPath) {
     return parseProjectConfig(await readFile(configPath, "utf8"), configPath);
   } catch (error) {
     if (error && typeof error === "object" && error.code === "ENOENT") {
-      throw new Error(`missing ${configPath}; copy config.example.yaml to config.yaml`);
+      throw new Error(`missing ${configPath}; run openwrtctl init`);
     }
 
     throw error;

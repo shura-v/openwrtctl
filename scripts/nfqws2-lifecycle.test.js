@@ -21,7 +21,7 @@ test("updates only a managed nfqws2 installation and preserves its config", () =
   assert.ok(markerIndex >= 0 && markerIndex < preserveIndex);
   assert.ok(preserveIndex < validateIndex && validateIndex < replaceIndex);
   assert.match(command, new RegExp(NFQWS2_RELEASE.archiveSha256, "u"));
-  assert.match(command, new RegExp(NFQWS2_RELEASE.binarySha256, "u"));
+  assert.match(command, new RegExp(NFQWS2_RELEASE.binarySha256ByTarget.arm64, "u"));
   assert.match(command, /zapret-auto\.lua/u);
   assert.match(command, /quic_initial_www_google_com\.bin/u);
   assert.match(command, /--dry-run --qnum=300 --user=root/u);
@@ -55,7 +55,7 @@ test("updates to an explicitly selected release", () => {
   const release = {
     ...createNfqws2Release("1.0.3"),
     archiveSha256: "c".repeat(64),
-    binarySha256: "d".repeat(64)
+    binarySha256ByTarget: { arm64: "d".repeat(64) }
   };
   const command = buildRemoteUpdateCommand(
     "/root/tmp/zapret2-release.tar.gz",

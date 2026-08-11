@@ -2,14 +2,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { $, which } from "zx";
 import { loadProjectConfig } from "./config.js";
+import { CONFIG_PATH } from "./config-path.js";
 
 const libDirectory = path.dirname(fileURLToPath(import.meta.url));
 
 export const PROJECT_DIRECTORY = path.resolve(libDirectory, "../..");
-
 export async function createRemote() {
   const configPath = path.resolve(
-    process.env.OPENWRT_CONFIG_FILE ?? path.join(process.cwd(), "config.yaml")
+    process.env.OPENWRT_CONFIG_FILE ?? CONFIG_PATH
   );
   const localDirectory = path.dirname(configPath);
   const config = await loadProjectConfig(configPath);

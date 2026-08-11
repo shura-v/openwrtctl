@@ -4,6 +4,11 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { initConfig } from "./init.js";
+import { CONFIG_PATH } from "./lib/config-path.js";
+
+test("uses the initialized config as the default CLI config", () => {
+  assert.equal(CONFIG_PATH, path.join(os.homedir(), ".config/openwrtctl/config.yaml"));
+});
 
 test("creates a private config from the template without overwriting it", async (context) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "openwrtctl-init-"));

@@ -1,5 +1,9 @@
 # openwrtctl
 
+[![CI](https://github.com/shura-v/openwrtctl/actions/workflows/ci.yml/badge.svg)](https://github.com/shura-v/openwrtctl/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/openwrtctl.svg)](https://www.npmjs.com/package/openwrtctl)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/shura-v/openwrtctl/main/LICENSE)
+
 `openwrtctl` управляет домашним OpenWrt-роутером с локального компьютера:
 
 - подготавливает OpenWrt и блокирует QUIC;
@@ -14,14 +18,13 @@
 - OpenWrt 25.12+ с пакетным менеджером `apk`;
 - firewall4/nftables и стандартный LAN-интерфейс `br-lan`;
 - полный штатный пакет `sing-box`;
-- nfqws2 из embedded-релиза zapret2 для `aarch64`;
+- nfqws2 из embedded-релиза zapret2 для поддерживаемой архитектуры OpenWrt;
 - локальные Node.js 22+, `npm`, `ssh` и `rsync`.
 
 ## Установка
 
 ```sh
-npm install
-npm link
+npm install -g openwrtctl
 openwrtctl init
 ```
 
@@ -33,12 +36,15 @@ rewrite IP, профиль и каталог rule sets. Относительны
 ## Использование
 
 ```sh
-openwrtctl --config /path/to/config.yaml prepare-router
-openwrtctl --config /path/to/config.yaml install-adguard
-openwrtctl --config /path/to/config.yaml install-singbox
-openwrtctl --config /path/to/config.yaml install-nfqws2
-openwrtctl --config /path/to/config.yaml sync
+openwrtctl prepare-router
+openwrtctl install-adguard
+openwrtctl install-singbox
+openwrtctl install-nfqws2
+openwrtctl sync
 ```
+
+Команды по умолчанию читают `~/.config/openwrtctl/config.yaml`. Опция
+`--config /path/to/config.yaml` позволяет явно выбрать другой файл.
 
 Для выбранных сервисов доступны команды `install-*`, `update-*`, `uninstall-*`
 и `sync-*`. Общая команда `sync` последовательно синхронизирует AdGuard Home,
@@ -67,3 +73,16 @@ openwrtctl update-nfqws2 --version=1.0.4
 ```sh
 openwrtctl restore ~/backups/openwrt/openwrt-backup-….tar.gz
 ```
+
+## Релизы
+
+Первый merge release-инфраструктуры в `main` публикует ещё отсутствующий в npm
+`openwrtctl@0.1.0`. Для следующих пользовательских изменений добавляйте
+Changeset в feature PR:
+
+```sh
+npm run changeset
+```
+
+После merge GitHub Actions создаёт release PR с новой версией и changelog.
+Merge release PR публикует пакет в npm, создаёт Git tag и GitHub Release.

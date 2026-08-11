@@ -1,11 +1,9 @@
 import { constants } from "node:fs";
 import { chmod, copyFile, mkdir } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { CONFIG_DIRECTORY, CONFIG_PATH } from "./lib/config-path.js";
 
-export const CONFIG_DIRECTORY = path.join(os.homedir(), ".config/openwrtctl");
-export const CONFIG_PATH = path.join(CONFIG_DIRECTORY, "config.yaml");
+export { CONFIG_DIRECTORY, CONFIG_PATH };
 const TEMPLATE_PATH = fileURLToPath(
   new URL("../config.example.yaml", import.meta.url)
 );

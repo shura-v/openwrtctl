@@ -1,15 +1,30 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { mkdir, mkdtemp, rename, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { $ } from "zx";
+import {
+  buildRemoteNfqws2ArchitectureSelection,
+  NFQWS2_BINARY_TARGETS
+} from "./nfqws2-architecture.js";
 
 export const DEFAULT_NFQWS2_VERSION = "1.0.4";
 
 const PINNED_RELEASE_HASHES = Object.freeze({
   "1.0.4": Object.freeze({
     archiveSha256: "2ac26fef23ec387fbbb34aab2e34290dec0012afccb9453fd8befdeb733ccde3",
-    binarySha256: "b2827dcad28c2d3fc567cf7da34fd94832a551cbb492e8ce820ab944814a82c6"
+    binarySha256ByTarget: Object.freeze({
+      arm: "7d379ca5270da83c254e9df5995f71dbea7a2126b5c9632d6f5b802eaecfb3ee",
+      arm64: "b2827dcad28c2d3fc567cf7da34fd94832a551cbb492e8ce820ab944814a82c6",
+      lexra: "72e2b9bc040e9e4739147d92730363f7b97d438e9e509a01a4a97a8117c9f8f5",
+      mips: "4e8fbaae750d3e7fa10081b582996c2fdd01219f55164360f27d13da50b51d74",
+      mips64: "30f2984dff5b69dbc258d6a2eab9cfbf61b8a60aba654304add7e6f0bf58ee1b",
+      mipsel: "d89af93c5b62fedb4bdadb9c0cd98d0d1998dcdf699076ea5c65f47b64b389ac",
+      ppc: "00da87e56cc5b818aa85447bced68b6ede16243cb79bee6d7b255b0998c71c5a",
+      riscv64: "8e4ddc0f4b81e03a6c1c76c4025e6d9d66c86325ff2169184adbc60b029f60b4",
+      x86: "bca221f7d7b1ff4b77f2f9febcbd4b414ccab6815268009cd7aef2b6871bc7a1",
+      x86_64: "58637c7b9d4bcd2dbd34e83244370df553215bc8cf370f738ac5d53e5c154b60"
+    })
   })
 });
 
@@ -36,7 +51,7 @@ export function createNfqws2Release(version) {
     version: normalizedVersion,
     archiveName,
     archiveSha256: hashes.archiveSha256,
-    binarySha256: hashes.binarySha256,
+    binarySha256ByTarget: hashes.binarySha256ByTarget ?? Object.freeze({}),
     sourceDirectory: `zapret2-v${normalizedVersion}`,
     url: `https://github.com/bol-van/zapret2/releases/download/v${normalizedVersion}/${archiveName}`
   });
@@ -116,6 +131,7 @@ export function buildRemoteInstallCommand(
     path.posix.dirname(remoteArchivePath),
     "zapret2-install"
   );
+  const architectureSelection = buildRemoteNfqws2ArchitectureSelection(release);
 
   return `
 set -eu
@@ -125,7 +141,6 @@ stage='${remoteStagePath}'
 source_dir="$stage/${release.sourceDirectory}"
 target=/opt/zapret2
 expected_archive_sha256=${release.archiveSha256}
-expected_binary_sha256=${release.binarySha256}
 
 actual_archive_sha256="$(sha256sum "$archive" | cut -d ' ' -f 1)"
 [ "$actual_archive_sha256" = "$expected_archive_sha256" ] || {
@@ -133,20 +148,16 @@ actual_archive_sha256="$(sha256sum "$archive" | cut -d ' ' -f 1)"
   exit 1
 }
 
-[ "$(uname -m)" = "aarch64" ] || {
-  echo "unsupported router architecture: $(uname -m)" >&2
-  exit 1
-}
-
 rm -rf "$stage"
 mkdir -p "$stage"
 tar -xzf "$archive" -C "$stage"
-[ -x "$source_dir/binaries/linux-arm64/nfqws2" ] || {
-  echo "linux-arm64/nfqws2 is missing from the release" >&2
+${architectureSelection}
+[ -x "$binary_dir/nfqws2" ] || {
+  echo "linux-$binary_target/nfqws2 is missing from the release" >&2
   exit 1
 }
 
-actual_binary_sha256="$(sha256sum "$source_dir/binaries/linux-arm64/nfqws2" | cut -d ' ' -f 1)"
+actual_binary_sha256="$(sha256sum "$binary_dir/nfqws2" | cut -d ' ' -f 1)"
 [ "$actual_binary_sha256" = "$expected_binary_sha256" ] || {
   echo "nfqws2 binary checksum mismatch" >&2
   exit 1
@@ -169,9 +180,9 @@ if [ -e "$target" ]; then
 else
   mkdir -p "$source_dir/nfq2" "$source_dir/ip2net" "$source_dir/mdig" \
     "$source_dir/init.d/openwrt/custom.d" "$source_dir/tmp"
-  ln -s ../binaries/linux-arm64/nfqws2 "$source_dir/nfq2/nfqws2"
-  ln -s ../binaries/linux-arm64/ip2net "$source_dir/ip2net/ip2net"
-  ln -s ../binaries/linux-arm64/mdig "$source_dir/mdig/mdig"
+  ln -s "../binaries/linux-$binary_target/nfqws2" "$source_dir/nfq2/nfqws2"
+  ln -s "../binaries/linux-$binary_target/ip2net" "$source_dir/ip2net/ip2net"
+  ln -s "../binaries/linux-$binary_target/mdig" "$source_dir/mdig/mdig"
   cp "$source_dir/config.default" "$source_dir/config"
   touch "$source_dir/ipset/zapret-hosts-user.txt"
   touch "$source_dir/ipset/zapret-hosts-user-ipban.txt"
@@ -243,30 +254,45 @@ async function inspectReleaseArchive(archivePath, requestedRelease) {
   const inspectionDirectory = await mkdtemp(
     path.join(path.dirname(archivePath), ".nfqws2-inspect-")
   );
-  const binaryRelativePath = path.join(
+  const binariesRelativePath = path.join(
     requestedRelease.sourceDirectory,
-    "binaries/linux-arm64/nfqws2"
+    "binaries"
   );
   const run = $({ verbose: false });
 
   try {
-    await run`tar -xzf ${archivePath} -C ${inspectionDirectory} ${binaryRelativePath}`;
-    const binarySha256 = await fileSha256(
-      path.join(inspectionDirectory, binaryRelativePath)
-    );
-    if (
-      requestedRelease.binarySha256 &&
-      binarySha256 !== requestedRelease.binarySha256
-    ) {
-      throw new Error(
-        `SHA-256 mismatch for nfqws2 ${requestedRelease.version}: expected ${requestedRelease.binarySha256}, got ${binarySha256}`
+    await run`tar -xzf ${archivePath} -C ${inspectionDirectory} ${binariesRelativePath}`;
+    const binarySha256ByTarget = {};
+    const binaryDirectory = path.join(inspectionDirectory, binariesRelativePath);
+    const entries = await readdir(binaryDirectory, { withFileTypes: true });
+    const availableTargets = entries
+      .filter((entry) => entry.isDirectory() && entry.name.startsWith("linux-"))
+      .map((entry) => entry.name.slice("linux-".length))
+      .filter((target) => NFQWS2_BINARY_TARGETS.includes(target));
+
+    for (const target of availableTargets) {
+      const binarySha256 = await fileSha256(
+        path.join(binaryDirectory, `linux-${target}/nfqws2`)
       );
+      const expectedSha256 = requestedRelease.binarySha256ByTarget[target];
+      if (expectedSha256 && binarySha256 !== expectedSha256) {
+        throw new Error(
+          `SHA-256 mismatch for nfqws2 ${requestedRelease.version} linux-${target}: expected ${expectedSha256}, got ${binarySha256}`
+        );
+      }
+      binarySha256ByTarget[target] = binarySha256;
+    }
+
+    for (const target of Object.keys(requestedRelease.binarySha256ByTarget)) {
+      if (binarySha256ByTarget[target] === undefined) {
+        throw new Error(`nfqws2 ${requestedRelease.version} has no linux-${target} binary`);
+      }
     }
 
     return Object.freeze({
       ...requestedRelease,
       archiveSha256,
-      binarySha256
+      binarySha256ByTarget: Object.freeze(binarySha256ByTarget)
     });
   } finally {
     await rm(inspectionDirectory, { recursive: true, force: true });
