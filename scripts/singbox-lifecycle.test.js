@@ -12,11 +12,13 @@ import {
 
 test("disables managed sing-box without removing its config", () => {
   const command = buildDisableSingBoxCommand();
+  const disableIndex = command.indexOf("/etc/init.d/sing-box disable");
+  const stopIndex = command.indexOf("/etc/init.d/sing-box stop");
 
   assert.match(command, new RegExp(SINGBOX_MARKER_PATH.replaceAll("/", "\\/"), "u"));
   assert.match(command, /sing-box\.main\.enabled='0'/u);
-  assert.match(command, /\/etc\/init\.d\/sing-box stop/u);
-  assert.match(command, /\/etc\/init\.d\/sing-box disable/u);
+  assert.ok(disableIndex >= 0 && disableIndex < stopIndex);
+  assert.doesNotMatch(command, /\/etc\/init\.d\/sing-box stop \|\| true/u);
   assert.doesNotMatch(command, /apk del|rm -rf|sing-box restart/u);
 });
 
