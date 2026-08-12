@@ -1,5 +1,11 @@
 # openwrtctl
 
+## 0.3.1
+
+### Patch Changes
+
+- 393d164: Disable sing-box autostart before stopping the service so a shutdown failure cannot leave it enabled for the next boot.
+
 ## 0.3.0
 
 ### Minor Changes
