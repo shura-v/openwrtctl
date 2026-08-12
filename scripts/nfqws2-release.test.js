@@ -78,7 +78,7 @@ test("verifies local release files with SHA-256", async (context) => {
   );
 });
 
-test("uploads the local archive before running the router installer", async () => {
+test("stages the release in RAM before running the router installer", async () => {
   const calls = [];
   const remote = {
     config: { openwrt: { remoteTmpDir: "/root/tmp" } },
@@ -88,11 +88,12 @@ test("uploads the local archive before running the router installer", async () =
 
   await installNfqws2Release(remote, "/local/zapret2.tar.gz");
 
-  const remoteArchivePath = "/root/tmp/zapret2-release.tar.gz";
+  const remoteArchivePath = "/tmp/openwrtctl-zapret2-release.tar.gz";
   assert.deepEqual(calls[0], ["push", "/local/zapret2.tar.gz", remoteArchivePath]);
   assert.match(calls[1][1], /tar -xzf "\$archive"/u);
+  assert.match(calls[1][1], /trap cleanup EXIT/u);
   assert.doesNotMatch(calls[1][1], /github\.com|\bcurl\b/u);
-  assert.deepEqual(calls[2], ["exec", `rm -f '${remoteArchivePath}'`]);
+  assert.equal(calls.length, 2);
 });
 
 test("selects the zapret2 binary from the OpenWrt architecture", () => {
@@ -105,6 +106,10 @@ test("selects the zapret2 binary from the OpenWrt architecture", () => {
   assert.match(command, /x86_64\*\) binary_target=x86_64/u);
   assert.match(command, /mipsel\*\) binary_target=mipsel/u);
   assert.match(command, /binaries\/linux-\$binary_target/u);
+  assert.match(
+    command,
+    /for binary_path in "\$source_dir"\/binaries\/linux-\*; do[\s\S]*rm -rf "\$binary_path"/u
+  );
   assert.match(command, new RegExp(NFQWS2_RELEASE.binarySha256ByTarget.arm64, "u"));
   assert.match(
     command,

@@ -15,10 +15,6 @@ set -eu
 apk update
 apk add rsync curl kmod-nfnetlink-queue kmod-nft-queue
 
-uci set dhcp.@dnsmasq[0].port="54"
-uci commit dhcp
-/etc/init.d/dnsmasq restart
-
 uci set firewall.@defaults[0].flow_offloading="0"
 uci set firewall.@defaults[0].flow_offloading_hw="0"
 uci -q delete firewall.block_quic || true
