@@ -71,8 +71,8 @@ apk info -e sing-box >/dev/null 2>&1 || {
 
 uci set sing-box.main.enabled='0'
 uci commit sing-box
-/etc/init.d/sing-box stop || true
 /etc/init.d/sing-box disable
+/etc/init.d/sing-box stop
 `;
 }
 
