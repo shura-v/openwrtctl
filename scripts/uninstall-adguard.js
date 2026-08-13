@@ -8,7 +8,7 @@ async function main() {
   await remote.exec(
     buildUninstallAdguardCommand(remote.config.openwrt.remoteTmpDir)
   );
-  console.log("Uninstalled AdGuard Home; dnsmasq is listening on port 53.");
+  console.log("Uninstalled AdGuard Home; router DNS configuration was left unchanged.");
 }
 
 function reportFailure(error) {

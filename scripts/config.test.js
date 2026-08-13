@@ -11,6 +11,7 @@ adguard:
   rewriteIp: 94.183.189.30
   querylogInterval: 6h
   webPort: 8080
+  dnsPort: 5353
   upstreamDns: [https://cloudflare-dns.com/dns-query, tls://common.dot.dns.yandex.net]
   bootstrapDns: [1.1.1.1, 77.88.8.8]
   upstreamMode: load_balance
@@ -43,6 +44,7 @@ test("parses the OpenWrt project config", () => {
       rewriteIp: "94.183.189.30",
       querylogInterval: "6h",
       webPort: 8080,
+      dnsPort: 5353,
       upstreamDns: [
         "https://cloudflare-dns.com/dns-query",
         "tls://common.dot.dns.yandex.net"
@@ -117,6 +119,14 @@ test("rejects invalid project config values", () => {
         "/project/config.yaml"
       ),
     /adguard\.webPort/u
+  );
+  assert.throws(
+    () =>
+      parseProjectConfig(
+        CONFIG.replace("dnsPort: 5353", "dnsPort: 0"),
+        "/project/config.yaml"
+      ),
+    /adguard\.dnsPort/u
   );
   assert.throws(
     () =>

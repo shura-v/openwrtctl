@@ -43,6 +43,7 @@ export function parseProjectConfig(sourceYaml, sourcePath = "config.yaml") {
   const rewriteIp = source.adguard.rewriteIp;
   const querylogInterval = source.adguard.querylogInterval;
   const webPort = source.adguard.webPort;
+  const dnsPort = source.adguard.dnsPort;
   const upstreamDns = source.adguard.upstreamDns;
   const bootstrapDns = source.adguard.bootstrapDns;
   const upstreamMode = source.adguard.upstreamMode;
@@ -76,6 +77,7 @@ export function parseProjectConfig(sourceYaml, sourcePath = "config.yaml") {
   }
 
   validatePort(webPort, `${sourcePath}: adguard.webPort`);
+  validatePort(dnsPort, `${sourcePath}: adguard.dnsPort`);
   const validatedUpstreamDns = validateStringList(
     upstreamDns,
     `${sourcePath}: adguard.upstreamDns`
@@ -130,6 +132,7 @@ export function parseProjectConfig(sourceYaml, sourcePath = "config.yaml") {
       rewriteIp,
       querylogInterval,
       webPort,
+      dnsPort,
       upstreamDns: validatedUpstreamDns,
       bootstrapDns: validatedBootstrapDns,
       upstreamMode

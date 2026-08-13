@@ -30,10 +30,12 @@ openwrtctl init
 
 `init` создаёт `~/.config/openwrtctl/config.yaml` из шаблона, выставляет права
 `0600` и сохраняет существующий файл без изменений. Заполните endpoint, AdGuard
-rewrite IP и DNS-настройки, профиль и каталог rule sets. `adguard.upstreamDns`,
+rewrite IP и DNS-настройки, профиль и каталог rule sets. В шаблоне уже задан
+`adguard.dnsPort: 5353`; `adguard.dnsPort`, `adguard.upstreamDns`,
 `adguard.bootstrapDns` и `adguard.upstreamMode` управляют соответствующими полями
 `dns.*` в AdGuard Home. Относительные пути разрешаются от каталога выбранного
-config-файла.
+config-файла. В существующий config добавьте `adguard.dnsPort: 5353` вручную:
+повторный `init` его не перезаписывает.
 
 ## Использование
 
@@ -44,6 +46,11 @@ openwrtctl install-singbox
 openwrtctl install-nfqws2
 openwrtctl sync
 ```
+
+После `install-adguard` завершите первичную настройку AdGuard Home вручную через
+его web-интерфейс и выберите DNS-порт `5353`, уже заданный в шаблоне.
+`openwrtctl` не меняет порт `dnsmasq`; последующий `sync-adguard` применяет
+`adguard.dnsPort` к `dns.port` AdGuard Home.
 
 Для быстрой read-only проверки роутера используйте `doctor`. Команда показывает
 модель, версию OpenWrt, uptime, источник и свободное место overlay, а также

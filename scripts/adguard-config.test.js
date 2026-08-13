@@ -34,6 +34,7 @@ users:
   - name: admin
     password: preserved-hash
 dns:
+  port: 1053
   upstream_dns:
     - https://old.example/dns-query
   bootstrap_dns:
@@ -57,6 +58,7 @@ http:
       rewrites,
       querylogInterval: "6h",
       webPort: "8080",
+      dnsPort: "5353",
       upstreamDns,
       bootstrapDns,
       upstreamMode: "fastest_addr"
@@ -64,6 +66,7 @@ http:
   );
 
   assert.deepEqual(result.users, [{ name: "admin", password: "preserved-hash" }]);
+  assert.equal(result.dns.port, 5353);
   assert.equal(result.dns.cache_size, 1234);
   assert.equal(result.filtering.filtering_enabled, true);
   assert.equal(result.querylog.interval, "6h");
@@ -83,6 +86,7 @@ http:
         rewrites,
         querylogInterval: "six-hours",
         webPort: "8080",
+        dnsPort: "5353",
         upstreamDns,
         bootstrapDns,
         upstreamMode: "load_balance"
@@ -95,11 +99,25 @@ http:
         rewrites,
         querylogInterval: "6h",
         webPort: "70000",
+        dnsPort: "5353",
         upstreamDns,
         bootstrapDns,
         upstreamMode: "load_balance"
       }),
     /ADGUARD_WEB_PORT/u
+  );
+  assert.throws(
+    () =>
+      patchAdguardConfig(source, {
+        rewrites,
+        querylogInterval: "6h",
+        webPort: "8080",
+        dnsPort: "70000",
+        upstreamDns,
+        bootstrapDns,
+        upstreamMode: "load_balance"
+      }),
+    /ADGUARD_DNS_PORT/u
   );
 });
 

@@ -98,25 +98,14 @@ export async function installNfqws2Release(
   localArchivePath,
   release = NFQWS2_RELEASE
 ) {
-  const remoteArchivePath = path.posix.join(
-    remote.config.openwrt.remoteTmpDir,
-    "zapret2-release.tar.gz"
-  );
+  const remoteArchivePath = "/tmp/openwrtctl-zapret2-release.tar.gz";
   await remote.push(localArchivePath, remoteArchivePath);
 
   try {
     await remote.exec(buildRemoteInstallCommand(remoteArchivePath, release));
   } catch (error) {
     throw new Error(
-      `nfqws2 install failed; uploaded archive remains at ${remoteArchivePath}: ${errorMessage(error)}`
-    );
-  }
-
-  try {
-    await remote.exec(`rm -f '${remoteArchivePath}'`);
-  } catch (error) {
-    throw new Error(
-      `nfqws2 ${release.version} was installed, but remote cleanup failed for ${remoteArchivePath}: ${errorMessage(error)}`
+      `nfqws2 install failed; temporary files were removed from RAM: ${errorMessage(error)}`
     );
   }
 
@@ -142,6 +131,11 @@ source_dir="$stage/${release.sourceDirectory}"
 target=/opt/zapret2
 expected_archive_sha256=${release.archiveSha256}
 
+cleanup() {
+  rm -rf "$stage" "$archive"
+}
+trap cleanup EXIT
+
 actual_archive_sha256="$(sha256sum "$archive" | cut -d ' ' -f 1)"
 [ "$actual_archive_sha256" = "$expected_archive_sha256" ] || {
   echo "zapret2 archive checksum mismatch" >&2
@@ -156,6 +150,10 @@ ${architectureSelection}
   echo "linux-$binary_target/nfqws2 is missing from the release" >&2
   exit 1
 }
+
+for binary_path in "$source_dir"/binaries/linux-*; do
+  [ "$binary_path" = "$binary_dir" ] || rm -rf "$binary_path"
+done
 
 actual_binary_sha256="$(sha256sum "$binary_dir/nfqws2" | cut -d ' ' -f 1)"
 [ "$actual_binary_sha256" = "$expected_binary_sha256" ] || {
@@ -216,7 +214,6 @@ ln -sfn "$target/init.d/openwrt/zapret2" /etc/init.d/zapret2
 ln -sfn "$target/init.d/openwrt/90-zapret2" /etc/hotplug.d/iface/90-zapret2
 /etc/init.d/zapret2 disable
 /etc/init.d/zapret2 stop
-rm -rf "$stage"
 `;
 }
 

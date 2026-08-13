@@ -36,6 +36,7 @@ export function patchAdguardConfig(sourceYaml, {
   rewrites,
   querylogInterval,
   webPort,
+  dnsPort,
   upstreamDns,
   bootstrapDns,
   upstreamMode
@@ -48,6 +49,10 @@ export function patchAdguardConfig(sourceYaml, {
 
   if (!/^\d+$/u.test(webPort) || Number(webPort) < 1 || Number(webPort) > 65535) {
     throw new Error(`ADGUARD_WEB_PORT must be an integer from 1 to 65535: ${JSON.stringify(webPort)}`);
+  }
+
+  if (!/^\d+$/u.test(dnsPort) || Number(dnsPort) < 1 || Number(dnsPort) > 65535) {
+    throw new Error(`ADGUARD_DNS_PORT must be an integer from 1 to 65535: ${JSON.stringify(dnsPort)}`);
   }
 
   const document = parseDocument(sourceYaml);
@@ -76,6 +81,7 @@ export function patchAdguardConfig(sourceYaml, {
   document.setIn(["dns", "upstream_dns"], upstreamDns);
   document.setIn(["dns", "bootstrap_dns"], bootstrapDns);
   document.setIn(["dns", "upstream_mode"], upstreamMode);
+  document.setIn(["dns", "port"], Number(dnsPort));
   document.setIn(["filtering", "rewrites"], rewrites);
   document.setIn(["querylog", "interval"], querylogInterval);
   document.setIn(["http", "address"], replaceAddressPort(currentWebAddress, webPort));
@@ -92,6 +98,7 @@ export async function generateAdguardConfig({
   rewriteIp,
   querylogInterval,
   webPort,
+  dnsPort,
   upstreamDns,
   bootstrapDns,
   upstreamMode,
@@ -103,6 +110,7 @@ export async function generateAdguardConfig({
     rewrites,
     querylogInterval,
     webPort,
+    dnsPort,
     upstreamDns,
     bootstrapDns,
     upstreamMode
@@ -119,6 +127,7 @@ async function main() {
     rewriteIp,
     querylogInterval,
     webPort,
+    dnsPort,
     upstreamDnsJson,
     bootstrapDnsJson,
     upstreamMode,
@@ -132,13 +141,14 @@ async function main() {
     !rewriteIp ||
     !querylogInterval ||
     !webPort ||
+    !dnsPort ||
     !upstreamDnsJson ||
     !bootstrapDnsJson ||
     !upstreamMode ||
     !outputPath
   ) {
     throw new Error(
-      "Usage: adguard-config.js <source-yaml> <sing-box-config> <rule-sets-directory> <rewrite-ip> <querylog-interval> <web-port> <upstream-dns-json> <bootstrap-dns-json> <upstream-mode> <output-yaml>"
+      "Usage: adguard-config.js <source-yaml> <sing-box-config> <rule-sets-directory> <rewrite-ip> <querylog-interval> <web-port> <dns-port> <upstream-dns-json> <bootstrap-dns-json> <upstream-mode> <output-yaml>"
     );
   }
 
@@ -149,6 +159,7 @@ async function main() {
     rewriteIp,
     querylogInterval,
     webPort,
+    dnsPort,
     upstreamDns: JSON.parse(upstreamDnsJson),
     bootstrapDns: JSON.parse(bootstrapDnsJson),
     upstreamMode,
