@@ -1,5 +1,17 @@
 # openwrtctl
 
+## 0.4.0
+
+### Minor Changes
+
+- 03851da: Keep the router DNS service unchanged and manage the AdGuard Home DNS listener through `adguard.dnsPort`, which defaults to `5353` in the config template.
+
+  Existing configurations must add `adguard.dnsPort` before upgrading.
+
+### Patch Changes
+
+- 03851da: Stage nfqws2 release archives in RAM and keep only the current router architecture when installing, reducing persistent flash usage on small OpenWrt devices.
+
 ## 0.3.1
 
 ### Patch Changes
