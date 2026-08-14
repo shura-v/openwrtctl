@@ -41,6 +41,8 @@
     "disable-nfqws2": "node ./bin/openwrtctl.js disable-nfqws2",
     "update-nfqws2": "node ./bin/openwrtctl.js update-nfqws2",
     "uninstall-nfqws2": "node ./bin/openwrtctl.js uninstall-nfqws2",
+    "test-nfqws2": "node ./bin/openwrtctl.js test-nfqws2",
+    "test-nfqws2-results": "node ./bin/openwrtctl.js test-nfqws2-results",
     "sync-adguard": "node ./bin/openwrtctl.js sync-adguard",
     "sync-singbox": "node ./bin/openwrtctl.js sync-singbox",
     "sync-nfqws2": "node ./bin/openwrtctl.js sync-nfqws2",

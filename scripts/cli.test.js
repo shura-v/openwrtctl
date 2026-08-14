@@ -24,6 +24,8 @@ test("exposes the complete openwrtctl command surface", async () => {
     "disable-nfqws2",
     "sync-singbox",
     "update-nfqws2",
+    "test-nfqws2",
+    "test-nfqws2-results",
     "sync"
   ]) {
     assert.match(stdout, new RegExp(`\\b${command}\\b`, "u"));

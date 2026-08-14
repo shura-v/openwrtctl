@@ -22,6 +22,9 @@ backup:
   directory: ~/backups/openwrt
 
 nfqws2:
+  test:
+    httpsDomains:
+      - www.youtube.com
   filter:
     tcp: [443, 80, 1984, 5222]
     udp: [590-600, 1400, 3478-3481, 5349, 19294-19344, 20000-30000, 49152-65535]

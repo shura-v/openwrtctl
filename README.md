@@ -34,8 +34,10 @@ rewrite IP и DNS-настройки, профиль и каталог rule sets
 `adguard.dnsPort: 5353`; `adguard.dnsPort`, `adguard.upstreamDns`,
 `adguard.bootstrapDns` и `adguard.upstreamMode` управляют соответствующими полями
 `dns.*` в AdGuard Home. Относительные пути разрешаются от каталога выбранного
-config-файла. В существующий config добавьте `adguard.dnsPort: 5353` вручную:
-повторный `init` его не перезаписывает.
+config-файла. `nfqws2.test.httpsDomains` задаёт непустой список доменов для
+HTTPS-проверки стратегий. В существующий config добавьте `adguard.dnsPort: 5353`
+и `nfqws2.test.httpsDomains: [www.youtube.com]` вручную: повторный `init` его не
+перезаписывает.
 
 ## Использование
 
@@ -84,6 +86,20 @@ Router-конфиг ограничивает TUN входящим интерфе
 openwrtctl install-nfqws2 --version=1.0.4
 openwrtctl update-nfqws2 --version=1.0.4
 ```
+
+`test-nfqws2` запускает встроенный `blockcheck2.sh` только для HTTPS по TCP:
+TLS 1.2 и TLS 1.3 включены, HTTP и HTTP/3 (QUIC) отключены. Команда временно
+останавливает managed zapret2 и запускает его снова после завершения или ошибки,
+если сервис работал до проверки. Полный лог сохраняется на роутере в
+`<openwrt.remoteTmpDir>/nfqws2-test.log`.
+
+```sh
+openwrtctl test-nfqws2
+openwrtctl test-nfqws2-results
+```
+
+`test-nfqws2-results` читает сохранённый лог и выводит только стратегии nfqws2,
+успешные в HTTPS-проверках TLS 1.2 или TLS 1.3.
 
 `backup` сохраняет архив в `backup.directory`. `restore` принимает явный путь:
 
