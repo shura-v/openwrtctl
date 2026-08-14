@@ -13,7 +13,7 @@ async function main() {
 set -eu
 
 apk update
-apk add rsync curl kmod-nfnetlink-queue kmod-nft-queue
+apk add rsync curl ncat kmod-nfnetlink-queue kmod-nft-queue
 
 uci set firewall.@defaults[0].flow_offloading="0"
 uci set firewall.@defaults[0].flow_offloading_hw="0"

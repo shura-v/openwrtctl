@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import test from "node:test";
 import { parseProjectConfig } from "./lib/config.js";
+import { PROJECT_DIRECTORY } from "./lib/remote.js";
 
 const CONFIG = `
 openwrt:
@@ -21,6 +24,8 @@ singboxctl:
 backup:
   directory: ./backups
 nfqws2:
+  test:
+    httpsDomains: [www.youtube.com, example.org]
   filter:
     tcp: [443, 80]
     udp: [3478-3481, 5349]
@@ -60,6 +65,9 @@ test("parses the OpenWrt project config", () => {
       directory: "/project/backups"
     },
     nfqws2: {
+      test: {
+        httpsDomains: ["www.youtube.com", "example.org"]
+      },
       filter: {
         tcp: ["443", "80"],
         udp: ["3478-3481", "5349"]
@@ -75,6 +83,19 @@ test("parses the OpenWrt project config", () => {
       }
     }
   });
+});
+
+test("loads the example nfqws2 HTTPS test domain", async () => {
+  const exampleConfig = await readFile(
+    path.join(PROJECT_DIRECTORY, "config.example.yaml"),
+    "utf8"
+  );
+
+  assert.deepEqual(
+    parseProjectConfig(exampleConfig, path.join(PROJECT_DIRECTORY, "config.example.yaml"))
+      .nfqws2.test.httpsDomains,
+    ["www.youtube.com"]
+  );
 });
 
 test("rejects invalid project config values", () => {
@@ -135,6 +156,25 @@ test("rejects invalid project config values", () => {
         "/project/config.yaml"
       ),
     /openwrt\.remoteTmpDir/u
+  );
+  assert.throws(
+    () =>
+      parseProjectConfig(
+        CONFIG.replace("httpsDomains: [www.youtube.com, example.org]", "httpsDomains: []"),
+        "/project/config.yaml"
+      ),
+    /nfqws2\.test\.httpsDomains/u
+  );
+  assert.throws(
+    () =>
+      parseProjectConfig(
+        CONFIG.replace(
+          "httpsDomains: [www.youtube.com, example.org]",
+          "httpsDomains: [https://www.youtube.com, 'bad; command']"
+        ),
+        "/project/config.yaml"
+      ),
+    /nfqws2\.test\.httpsDomains/u
   );
   assert.throws(
     () =>

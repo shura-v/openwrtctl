@@ -50,6 +50,7 @@ export function parseProjectConfig(sourceYaml, sourcePath = "config.yaml") {
   const filter = source.nfqws2.filter;
   const filterL7 = source.nfqws2.filterL7;
   const strategy = source.nfqws2.strategy;
+  const nfqws2Test = source.nfqws2.test;
   const profile = source.singboxctl.profile;
   const ruleSetsDirectory = source.singboxctl.ruleSetsDirectory;
   const backupDirectory = source.backup.directory;
@@ -114,6 +115,10 @@ export function parseProjectConfig(sourceYaml, sourcePath = "config.yaml") {
     throw new Error(`${sourcePath}: nfqws2.strategy must be a mapping`);
   }
 
+  if (!isRecord(nfqws2Test)) {
+    throw new Error(`${sourcePath}: nfqws2.test must be a mapping`);
+  }
+
   const tcpFilter = validatePortFilter(filter.tcp, `${sourcePath}: nfqws2.filter.tcp`);
   const udpFilter = validatePortFilter(filter.udp, `${sourcePath}: nfqws2.filter.udp`, true);
   if (!isRecord(filterL7)) {
@@ -125,6 +130,10 @@ export function parseProjectConfig(sourceYaml, sourcePath = "config.yaml") {
   const httpStrategy = validateStrategy(strategy.http, `${sourcePath}: nfqws2.strategy.http`);
   const httpsStrategy = validateStrategy(strategy.https, `${sourcePath}: nfqws2.strategy.https`);
   const udpStrategy = validateStrategy(strategy.udp, `${sourcePath}: nfqws2.strategy.udp`);
+  const httpsDomains = validateDomainList(
+    nfqws2Test.httpsDomains,
+    `${sourcePath}: nfqws2.test.httpsDomains`
+  );
 
   return {
     openwrt: { endpoint, sshPort, remoteTmpDir },
@@ -150,7 +159,8 @@ export function parseProjectConfig(sourceYaml, sourcePath = "config.yaml") {
         udp: udpFilter
       },
       filterL7: { tcp: tcpL7Filter, udp: udpL7Filter },
-      strategy: { http: httpStrategy, https: httpsStrategy, udp: udpStrategy }
+      strategy: { http: httpStrategy, https: httpsStrategy, udp: udpStrategy },
+      test: { httpsDomains }
     }
   };
 }
@@ -210,6 +220,26 @@ function validateNameList(value, fieldName) {
   }
 
   return value;
+}
+
+function validateDomainList(value, fieldName) {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`${fieldName} must be a non-empty list of domain names`);
+  }
+
+  const domainPattern =
+    /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/iu;
+
+  if (
+    value.some(
+      (domain) =>
+        typeof domain !== "string" || domain.length > 253 || !domainPattern.test(domain)
+    )
+  ) {
+    throw new Error(`${fieldName} must contain valid domain names`);
+  }
+
+  return [...value];
 }
 
 function validateStrategy(value, fieldName) {

@@ -29,3 +29,12 @@ test("blocks QUIC before sing-box routing and from router output", async () => {
   );
   assert.doesNotMatch(rules, /\bwan\b/u);
 });
+
+test("installs ncat for nfqws2 blockcheck port tests", async () => {
+  const prepareScript = await readFile(
+    path.join(PROJECT_DIRECTORY, "scripts/prepare.js"),
+    "utf8"
+  );
+
+  assert.match(prepareScript, /apk add[^\n]*\bncat\b/u);
+});

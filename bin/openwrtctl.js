@@ -27,6 +27,8 @@ const COMMANDS = new Map([
   ["disable-nfqws2", ["disable-nfqws2.js"]],
   ["update-nfqws2", ["update-nfqws2.js"]],
   ["uninstall-nfqws2", ["uninstall-nfqws2.js"]],
+  ["test-nfqws2", ["test-nfqws2.js"]],
+  ["test-nfqws2-results", ["test-nfqws2-results.js"]],
   ["sync-adguard", ["sync-adguard.js"]],
   ["sync-singbox", ["sync-singbox.js"]],
   ["sync-nfqws2", ["sync-nfqws2.js"]],
@@ -101,6 +103,7 @@ Commands:
   install-adguard     uninstall-adguard     sync-adguard
   install-singbox     disable-singbox       update-singbox        uninstall-singbox     sync-singbox
   install-nfqws2      disable-nfqws2        update-nfqws2         uninstall-nfqws2      sync-nfqws2
+  test-nfqws2         test-nfqws2-results
   sync
 `);
 }
