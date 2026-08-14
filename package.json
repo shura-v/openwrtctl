@@ -1,6 +1,6 @@
 {
   "name": "openwrtctl",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "CLI for managing AdGuard Home, sing-box, and nfqws2 on OpenWrt routers",
   "author": "Shura Vlasov",
   "license": "MIT",

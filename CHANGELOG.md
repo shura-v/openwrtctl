@@ -1,5 +1,11 @@
 # openwrtctl
 
+## 0.5.1
+
+### Patch Changes
+
+- 3e8508a: Настроена автоматическая передача DNS-запросов из dnsmasq в AdGuard Home при синхронизации и восстановление стандартного upstream OpenWrt при удалении AdGuard Home.
+
 ## 0.5.0
 
 ### Minor Changes
