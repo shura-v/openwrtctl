@@ -1,14 +1,14 @@
 import { access, chmod, mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { constants } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { $ } from "zx";
 import { generateAdguardConfig } from "./adguard-config.js";
 import { createLocalAdguardBackup } from "./lib/adguard-backup.js";
+import { buildConfigureDnsmasqCommand } from "./lib/adguard-lifecycle.js";
 import { applyRemoteConfig, restoreRemoteConfig } from "./lib/adguard-remote-config.js";
 import { resolvePackageBin } from "./lib/package-bin.js";
 import { createRemote } from "./lib/remote.js";
-
-main().catch(reportFailure);
 
 async function main() {
   const remote = await createRemote();
@@ -50,22 +50,42 @@ async function main() {
     await remote.push(patchedConfigPath, remoteStagedConfigPath);
     await remote.exec(`AdGuardHome --check-config -c '${remoteStagedConfigPath}'`);
 
-    try {
-      await applyRemoteConfig(remote, remoteStagedConfigPath, adguardConfigPath);
-    } catch (applyError) {
-      await restoreRemoteConfig(
-        remote,
-        backupPath,
-        remoteStagedConfigPath,
-        adguardConfigPath,
-        applyError
-      );
-    }
+    await applyAdguardConfigTransaction({
+      remote,
+      backupPath,
+      remoteStagedConfigPath,
+      adguardConfigPath,
+      configureDnsmasqCommand: buildConfigureDnsmasqCommand(
+        remote.config.openwrt.remoteTmpDir,
+        remote.config.adguard.dnsPort
+      )
+    });
   } finally {
     await Promise.all(
       [sourceConfigPath, singboxConfigPath, patchedConfigPath].map((filePath) =>
         rm(filePath, { force: true })
       )
+    );
+  }
+}
+
+export async function applyAdguardConfigTransaction({
+  remote,
+  backupPath,
+  remoteStagedConfigPath,
+  adguardConfigPath,
+  configureDnsmasqCommand
+}) {
+  try {
+    await applyRemoteConfig(remote, remoteStagedConfigPath, adguardConfigPath);
+    await remote.exec(configureDnsmasqCommand);
+  } catch (applyError) {
+    await restoreRemoteConfig(
+      remote,
+      backupPath,
+      remoteStagedConfigPath,
+      adguardConfigPath,
+      applyError
     );
   }
 }
@@ -81,4 +101,8 @@ async function requirePath(filePath, mode, label) {
 function reportFailure(error) {
   console.error(`openwrt: ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch(reportFailure);
 }

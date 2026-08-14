@@ -6,9 +6,12 @@ main().catch(reportFailure);
 async function main() {
   const remote = await createRemote();
   await remote.exec(
-    buildUninstallAdguardCommand(remote.config.openwrt.remoteTmpDir)
+    buildUninstallAdguardCommand(
+      remote.config.openwrt.remoteTmpDir,
+      remote.config.adguard.dnsPort
+    )
   );
-  console.log("Uninstalled AdGuard Home; router DNS configuration was left unchanged.");
+  console.log("Uninstalled AdGuard Home and removed its managed dnsmasq upstream.");
 }
 
 function reportFailure(error) {

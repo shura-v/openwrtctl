@@ -51,8 +51,11 @@ openwrtctl sync
 
 После `install-adguard` завершите первичную настройку AdGuard Home вручную через
 его web-интерфейс и выберите DNS-порт `5353`, уже заданный в шаблоне.
-`openwrtctl` не меняет порт `dnsmasq`; последующий `sync-adguard` применяет
-`adguard.dnsPort` к `dns.port` AdGuard Home.
+Последующий `sync-adguard` применяет `adguard.dnsPort` к `dns.port` AdGuard Home
+и направляет стандартный upstream `dnsmasq` на `127.0.0.1:<adguard.dnsPort>`.
+Если в `dnsmasq` уже задан пользовательский upstream, синхронизация завершится
+ошибкой и сохранит его без изменений. `uninstall-adguard` восстанавливает
+стандартный upstream OpenWrt до остановки AdGuard Home.
 
 Для быстрой read-only проверки роутера используйте `doctor`. Команда показывает
 модель, версию OpenWrt, uptime, источник и свободное место overlay, а также
