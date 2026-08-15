@@ -1,5 +1,11 @@
 # openwrtctl
 
+## 1.0.0
+
+### Major Changes
+
+- dfd16e1: Replace the embedded singboxctl pipeline with local artifact paths, optional shell-free producer commands, and independently optional sing-box, AdGuard, and nfqws2 service sections.
+
 ## 0.5.1
 
 ### Patch Changes
