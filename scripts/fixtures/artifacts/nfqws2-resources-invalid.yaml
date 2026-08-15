@@ -1,0 +1,7 @@
+userList:
+  - example.com
+  - |-
+    line-one
+    line-two
+ipsetList:
+  - 192.0.2.0/24

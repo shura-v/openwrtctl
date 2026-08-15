@@ -1,32 +1,35 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { loadRouterResources } from "./lib/router-resources.js";
+import { parseDocument } from "yaml";
 
 export const NFQWS2_USER_LIST_PATH = "/etc/nfqws2/lists/user.list";
 export const NFQWS2_IPSET_LIST_PATH = "/etc/nfqws2/lists/ipset.list";
 
-export function buildNfqws2Lists(resources) {
-  const domains = new Set();
-  const ipsets = new Set();
+export function parseNfqws2Resources(sourceYaml) {
+  const document = parseDocument(decodeYaml(sourceYaml, "nfqws2 resources artifact"));
 
-  for (const resource of resources) {
-    if (resource.kind === "domain") {
-      domains.add(`^${resource.value}`);
-      continue;
-    }
+  if (document.errors.length > 0) {
+    throw new Error(`Invalid nfqws2 resources YAML: ${document.errors[0].message}`);
+  }
 
-    if (resource.kind === "domain_suffix") {
-      domains.add(resource.value);
-      continue;
-    }
+  const resources = document.toJS();
 
-    if (resource.kind === "ip_cidr") {
-      ipsets.add(resource.value);
-    }
+  if (!isRecord(resources)) {
+    throw new Error("nfqws2 resources artifact must be a top-level YAML mapping");
+  }
+
+  const unexpectedFields = Object.keys(resources).filter(
+    (fieldName) => fieldName !== "userList" && fieldName !== "ipsetList"
+  );
+
+  if (unexpectedFields.length > 0) {
+    throw new Error(
+      `nfqws2 resources artifact has unsupported field ${JSON.stringify(unexpectedFields[0])}`
+    );
   }
 
   return {
-    domains: [...domains].sort((left, right) => left.localeCompare(right)),
-    ipsets: [...ipsets].sort((left, right) => left.localeCompare(right))
+    userList: validateResourceList(resources.userList, "nfqws2 resources.userList"),
+    ipsetList: validateResourceList(resources.ipsetList, "nfqws2 resources.ipsetList")
   };
 }
 
@@ -71,33 +74,67 @@ export function patchNfqws2Config(
 export async function generateNfqws2Bundle({
   sourceConfigPath,
   nfqws2,
-  singBoxConfigPath,
-  ruleSetsDirectoryPath,
+  resources,
   remoteTmpDirectory,
   outputConfigPath,
   outputUserListPath,
   outputIpsetListPath
 }) {
-  const [sourceConfig, resources] = await Promise.all([
-    readFile(sourceConfigPath, "utf8"),
-    loadRouterResources(singBoxConfigPath, ruleSetsDirectoryPath)
-  ]);
-  const lists = buildNfqws2Lists(resources);
+  const sourceConfig = await readFile(sourceConfigPath, "utf8");
   const patchedConfig = patchNfqws2Config(sourceConfig, nfqws2, {
     remoteTmpDirectory,
-    hasDomains: lists.domains.length > 0,
-    hasIpsets: lists.ipsets.length > 0
+    hasDomains: resources.userList.length > 0,
+    hasIpsets: resources.ipsetList.length > 0
   });
 
   await Promise.all([
     writeFile(outputConfigPath, patchedConfig, { encoding: "utf8", mode: 0o600 }),
-    writeList(outputUserListPath, lists.domains),
-    writeList(outputIpsetListPath, lists.ipsets)
+    writeList(outputUserListPath, resources.userList),
+    writeList(outputIpsetListPath, resources.ipsetList)
   ]);
 
   console.log(
-    `Generated nfqws2 bundle: ${lists.domains.length} domains, ${lists.ipsets.length} IPv4/IPv6 networks`
+    `Generated nfqws2 bundle: ${resources.userList.length} user-list entries, ${resources.ipsetList.length} ipset entries`
   );
+}
+
+function validateResourceList(value, fieldName) {
+  if (!Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an array`);
+  }
+
+  return value.map((item, index) => {
+    if (
+      typeof item !== "string" ||
+      item.length === 0 ||
+      item.trim() !== item ||
+      /[\r\n\0]/u.test(item)
+    ) {
+      throw new Error(`${fieldName}[${index}] must be a non-empty single-line string`);
+    }
+
+    return item;
+  });
+}
+
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function decodeYaml(value, artifactName) {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (value instanceof Uint8Array) {
+    try {
+      return new TextDecoder("utf-8", { fatal: true }).decode(value);
+    } catch {
+      throw new Error(`${artifactName} must contain valid UTF-8`);
+    }
+  }
+
+  throw new Error(`${artifactName} must be a string or byte snapshot`);
 }
 
 function buildManagedStrategy(nfqws2, { hasDomains, hasIpsets }) {

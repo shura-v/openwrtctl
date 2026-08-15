@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
-  buildNfqws2Lists,
   generateNfqws2Bundle,
+  parseNfqws2Resources,
   patchNfqws2Config
 } from "./nfqws2-config.js";
 
@@ -48,17 +48,49 @@ const NFQWS2 = {
   }
 };
 
-test("builds host and mixed IPv4/IPv6 lists from every router resource", () => {
-  const lists = buildNfqws2Lists([
-    { kind: "domain_suffix", value: "z.example", route: "dns" },
-    { kind: "domain", value: "a.example", route: "proxy" },
-    { kind: "domain", value: "a.example" },
-    { kind: "ip_cidr", value: "2001:db8::/32", route: "dns" },
-    { kind: "ip_cidr", value: "192.0.2.0/24", route: "proxy" }
-  ]);
+test("parses independent nfqws2 resource manifests", () => {
+  assert.deepEqual(parseNfqws2Resources(`
+userList:
+  - ^a.example
+  - z.example
+ipsetList:
+  - 192.0.2.0/24
+  - 2001:db8::/32
+`), {
+    userList: ["^a.example", "z.example"],
+    ipsetList: ["192.0.2.0/24", "2001:db8::/32"]
+  });
+  assert.deepEqual(parseNfqws2Resources("userList: []\nipsetList: []\n"), {
+    userList: [],
+    ipsetList: []
+  });
+  assert.deepEqual(parseNfqws2Resources(Buffer.from("userList: []\nipsetList: []\n")), {
+    userList: [],
+    ipsetList: []
+  });
+});
 
-  assert.deepEqual(lists.domains, ["^a.example", "z.example"]);
-  assert.deepEqual(lists.ipsets, ["192.0.2.0/24", "2001:db8::/32"]);
+test("rejects malformed nfqws2 resource manifests", () => {
+  assert.throws(
+    () => parseNfqws2Resources("- example.com\n"),
+    /top-level YAML mapping/u
+  );
+  assert.throws(
+    () => parseNfqws2Resources("userList: example.com\nipsetList: []\n"),
+    /resources\.userList must be an array/u
+  );
+  assert.throws(
+    () => parseNfqws2Resources("userList: [example.com]\nipsetList: [42]\n"),
+    /resources\.ipsetList\[0\]/u
+  );
+  assert.throws(
+    () => parseNfqws2Resources("userList: []\nipsetList: []\nipsets: []\n"),
+    /unsupported field "ipsets"/u
+  );
+  assert.throws(
+    () => parseNfqws2Resources("userList:\n  - |\n    example.com\n    injected.example\nipsetList: []\n"),
+    /resources\.userList\[0\]/u
+  );
 });
 
 test("patches the official config into repeatable managed TCP and UDP profiles", () => {
@@ -127,45 +159,21 @@ test("rejects filters inside strategy fields", () => {
   );
 });
 
-test("generates config and lists from a singboxctl router profile", async (context) => {
+test("generates config and lists from an already parsed resource snapshot", async (context) => {
   const directory = await mkdtemp(path.join(tmpdir(), "nfqws2-config-"));
-  const ruleSetsDirectory = path.join(directory, "rule-sets");
   context.after(() => rm(directory, { recursive: true, force: true }));
-  await mkdir(ruleSetsDirectory);
-  await Promise.all([
-    writeFile(path.join(directory, "source.conf"), SOURCE_CONFIG),
-    writeFile(
-      path.join(directory, "sing-box.json"),
-      JSON.stringify({
-        route: {
-          rules: [
-            {
-              action: "route",
-              outbound: "proxy",
-              domain_suffix: ["dns.example", "plain.example"],
-              ip_cidr: ["2001:db8::/32"]
-            }
-          ]
-        }
-      })
-    ),
-    writeFile(
-      path.join(ruleSetsDirectory, "router.json"),
-      JSON.stringify({
-        rules: [
-          "domain_suffix:dns.example",
-          "domain_suffix:plain.example",
-          "ip_cidr:2001:db8::/32"
-        ]
-      })
-    )
-  ]);
+  await writeFile(path.join(directory, "source.conf"), SOURCE_CONFIG);
 
   await generateNfqws2Bundle({
     sourceConfigPath: path.join(directory, "source.conf"),
     nfqws2: NFQWS2,
-    singBoxConfigPath: path.join(directory, "sing-box.json"),
-    ruleSetsDirectoryPath: ruleSetsDirectory,
+    resources: parseNfqws2Resources(`
+userList:
+  - dns.example
+  - plain.example
+ipsetList:
+  - 2001:db8::/32
+`),
     remoteTmpDirectory: "/root/tmp",
     outputConfigPath: path.join(directory, "patched.conf"),
     outputUserListPath: path.join(directory, "user.list"),

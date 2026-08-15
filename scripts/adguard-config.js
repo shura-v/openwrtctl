@@ -1,35 +1,55 @@
 #!/usr/bin/env node
 
-import { isIP } from "node:net";
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { parse, parseDocument } from "yaml";
-import { loadRouterResources } from "./lib/router-resources.js";
 
-export function buildAdguardRewrites(resources, rewriteIp) {
-  if (isIP(rewriteIp) === 0) {
-    throw new Error(`ADGUARD_REWRITE_IP must be an IP address: ${JSON.stringify(rewriteIp)}`);
+export function parseAdguardRewrites(sourceYaml) {
+  const document = parseDocument(decodeYaml(sourceYaml, "AdGuard rewrites artifact"));
+
+  if (document.errors.length > 0) {
+    throw new Error(`Invalid AdGuard rewrites YAML: ${document.errors[0].message}`);
   }
 
-  const rewrites = new Map();
+  const rewrites = document.toJS();
 
-  for (const resource of resources) {
-    if (resource.route !== "dns") {
-      continue;
-    }
-
-    if (resource.kind === "domain") {
-      rewrites.set(resource.value, makeRewrite(resource.value, rewriteIp));
-      continue;
-    }
-
-    if (resource.kind === "domain_suffix") {
-      rewrites.set(resource.value, makeRewrite(resource.value, rewriteIp));
-      rewrites.set(`*.${resource.value}`, makeRewrite(`*.${resource.value}`, rewriteIp));
-    }
+  if (!Array.isArray(rewrites)) {
+    throw new Error("AdGuard rewrites artifact must be a top-level YAML sequence");
   }
 
-  return [...rewrites.values()].sort((left, right) => left.domain.localeCompare(right.domain));
+  const answersByDomain = new Map();
+  const normalizedRewrites = [];
+
+  for (const [index, rewrite] of rewrites.entries()) {
+    const fieldName = `AdGuard rewrites[${index}]`;
+
+    if (!isRecord(rewrite)) {
+      throw new Error(`${fieldName} must be a mapping`);
+    }
+
+    validateRewriteValue(rewrite.domain, `${fieldName}.domain`);
+    validateRewriteValue(rewrite.answer, `${fieldName}.answer`);
+
+    if (rewrite.enabled !== undefined && typeof rewrite.enabled !== "boolean") {
+      throw new Error(`${fieldName}.enabled must be a boolean`);
+    }
+
+    const previousAnswer = answersByDomain.get(rewrite.domain);
+
+    if (previousAnswer !== undefined && previousAnswer !== rewrite.answer) {
+      throw new Error(
+        `AdGuard rewrites artifact has conflicting answers for domain ${JSON.stringify(rewrite.domain)}`
+      );
+    }
+
+    answersByDomain.set(rewrite.domain, rewrite.answer);
+    normalizedRewrites.push({
+      ...rewrite,
+      enabled: rewrite.enabled ?? true
+    });
+  }
+
+  return normalizedRewrites;
 }
 
 export function patchAdguardConfig(sourceYaml, {
@@ -93,9 +113,7 @@ export function patchAdguardConfig(sourceYaml, {
 
 export async function generateAdguardConfig({
   sourcePath,
-  singBoxConfigPath,
-  ruleSetsDirectoryPath,
-  rewriteIp,
+  rewrites,
   querylogInterval,
   webPort,
   dnsPort,
@@ -104,8 +122,6 @@ export async function generateAdguardConfig({
   upstreamMode,
   outputPath
 }) {
-  const resources = await loadRouterResources(singBoxConfigPath, ruleSetsDirectoryPath);
-  const rewrites = buildAdguardRewrites(resources, rewriteIp);
   const patchedYaml = patchAdguardConfig(await readFile(sourcePath, "utf8"), {
     rewrites,
     querylogInterval,
@@ -116,15 +132,13 @@ export async function generateAdguardConfig({
     upstreamMode
   });
   await writeFile(outputPath, patchedYaml, { encoding: "utf8", mode: 0o600 });
-  console.log(`Patched AdGuard Home config: ${resources.length} router resources, ${rewrites.length} rewrites`);
+  console.log(`Patched AdGuard Home config: ${rewrites.length} rewrites`);
 }
 
 async function main() {
   const [
     sourcePath,
-    singBoxConfigPath,
-    ruleSetsDirectoryPath,
-    rewriteIp,
+    rewritesPath,
     querylogInterval,
     webPort,
     dnsPort,
@@ -136,9 +150,7 @@ async function main() {
 
   if (
     !sourcePath ||
-    !singBoxConfigPath ||
-    !ruleSetsDirectoryPath ||
-    !rewriteIp ||
+    !rewritesPath ||
     !querylogInterval ||
     !webPort ||
     !dnsPort ||
@@ -148,15 +160,13 @@ async function main() {
     !outputPath
   ) {
     throw new Error(
-      "Usage: adguard-config.js <source-yaml> <sing-box-config> <rule-sets-directory> <rewrite-ip> <querylog-interval> <web-port> <dns-port> <upstream-dns-json> <bootstrap-dns-json> <upstream-mode> <output-yaml>"
+      "Usage: adguard-config.js <source-yaml> <rewrites-yaml> <querylog-interval> <web-port> <dns-port> <upstream-dns-json> <bootstrap-dns-json> <upstream-mode> <output-yaml>"
     );
   }
 
   await generateAdguardConfig({
     sourcePath,
-    singBoxConfigPath,
-    ruleSetsDirectoryPath,
-    rewriteIp,
+    rewrites: parseAdguardRewrites(await readFile(rewritesPath, "utf8")),
     querylogInterval,
     webPort,
     dnsPort,
@@ -167,8 +177,31 @@ async function main() {
   });
 }
 
-function makeRewrite(domain, answer) {
-  return { domain, answer, enabled: true };
+function validateRewriteValue(value, fieldName) {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value.trim() !== value ||
+    /[\r\n\0]/u.test(value)
+  ) {
+    throw new Error(`${fieldName} must be a non-empty single-line string`);
+  }
+}
+
+function decodeYaml(value, artifactName) {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (value instanceof Uint8Array) {
+    try {
+      return new TextDecoder("utf-8", { fatal: true }).decode(value);
+    } catch {
+      throw new Error(`${artifactName} must contain valid UTF-8`);
+    }
+  }
+
+  throw new Error(`${artifactName} must be a string or byte snapshot`);
 }
 
 function replaceAddressPort(address, port) {

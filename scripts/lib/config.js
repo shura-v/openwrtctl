@@ -1,5 +1,4 @@
 import { readFile } from "node:fs/promises";
-import { isIP } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { parse } from "yaml";
@@ -25,35 +24,55 @@ export function parseProjectConfig(sourceYaml, sourcePath = "config.yaml") {
     throw new Error(`Invalid YAML in ${sourcePath}: ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  if (
-    !isRecord(source?.openwrt) ||
-    !isRecord(source?.adguard) ||
-    !isRecord(source?.nfqws2) ||
-    !isRecord(source?.singboxctl) ||
-    !isRecord(source?.backup)
-  ) {
-    throw new Error(
-      `${sourcePath} must contain openwrt, adguard, nfqws2, singboxctl and backup mappings`
+  if (isRecord(source?.adguard) && Object.hasOwn(source.adguard, "rewriteIp")) {
+    throw new Error(`${sourcePath}: adguard.rewriteIp is not supported; use adguard.rewrites.path`);
+  }
+
+  if (isRecord(source)) {
+    rejectUnknownFields(
+      source,
+      ["openwrt", "adguard", "nfqws2", "singbox", "backup"],
+      sourcePath
     );
   }
 
-  const endpoint = source.openwrt.endpoint;
-  const sshPort = source.openwrt.sshPort;
-  const remoteTmpDir = source.openwrt.remoteTmpDir;
-  const rewriteIp = source.adguard.rewriteIp;
-  const querylogInterval = source.adguard.querylogInterval;
-  const webPort = source.adguard.webPort;
-  const dnsPort = source.adguard.dnsPort;
-  const upstreamDns = source.adguard.upstreamDns;
-  const bootstrapDns = source.adguard.bootstrapDns;
-  const upstreamMode = source.adguard.upstreamMode;
-  const filter = source.nfqws2.filter;
-  const filterL7 = source.nfqws2.filterL7;
-  const strategy = source.nfqws2.strategy;
-  const nfqws2Test = source.nfqws2.test;
-  const profile = source.singboxctl.profile;
-  const ruleSetsDirectory = source.singboxctl.ruleSetsDirectory;
-  const backupDirectory = source.backup.directory;
+  if (
+    !isRecord(source?.openwrt) ||
+    !isRecord(source?.backup)
+  ) {
+    throw new Error(
+      `${sourcePath} must contain openwrt and backup mappings`
+    );
+  }
+
+  const config = {
+    openwrt: validateOpenwrt(source.openwrt, sourcePath),
+    backup: validateBackup(source.backup, sourcePath)
+  };
+
+  for (const [serviceName, validateService] of [
+    ["adguard", validateAdguard],
+    ["singbox", validateSingbox],
+    ["nfqws2", validateNfqws2]
+  ]) {
+    if (!Object.hasOwn(source, serviceName)) {
+      continue;
+    }
+
+    if (!isRecord(source[serviceName])) {
+      throw new Error(`${sourcePath}: ${serviceName} must be a mapping`);
+    }
+
+    config[serviceName] = validateService(source[serviceName], sourcePath);
+  }
+
+  return config;
+}
+
+function validateOpenwrt(openwrt, sourcePath) {
+  const endpoint = openwrt.endpoint;
+  const sshPort = openwrt.sshPort;
+  const remoteTmpDir = openwrt.remoteTmpDir;
 
   if (typeof endpoint !== "string" || !/^[\w.-]+@[\w.-]+$/u.test(endpoint)) {
     throw new Error(`${sourcePath}: openwrt.endpoint must have the form user@host`);
@@ -69,9 +88,56 @@ export function parseProjectConfig(sourceYaml, sourcePath = "config.yaml") {
     throw new Error(`${sourcePath}: openwrt.remoteTmpDir must be a normalized absolute path`);
   }
 
-  if (typeof rewriteIp !== "string" || isIP(rewriteIp) === 0) {
-    throw new Error(`${sourcePath}: adguard.rewriteIp must be an IP address`);
+  return { endpoint, sshPort, remoteTmpDir };
+}
+
+function validateBackup(backup, sourcePath) {
+  const backupDirectory = backup.directory;
+  if (typeof backupDirectory !== "string" || backupDirectory.length === 0) {
+    throw new Error(`${sourcePath}: backup.directory must be a path`);
   }
+
+  return { directory: resolveConfigPath(backupDirectory, sourcePath) };
+}
+
+function validateSingbox(singbox, sourcePath) {
+  rejectUnknownFields(singbox, ["config"], `${sourcePath}: singbox`);
+
+  return {
+    config: validateArtifactSource(
+      singbox.config,
+      `${sourcePath}: singbox.config`,
+      sourcePath
+    )
+  };
+}
+
+function validateAdguard(adguard, sourcePath) {
+  rejectUnknownFields(
+    adguard,
+    [
+      "rewrites",
+      "querylogInterval",
+      "webPort",
+      "dnsPort",
+      "upstreamDns",
+      "bootstrapDns",
+      "upstreamMode"
+    ],
+    `${sourcePath}: adguard`
+  );
+
+  const querylogInterval = adguard.querylogInterval;
+  const webPort = adguard.webPort;
+  const dnsPort = adguard.dnsPort;
+  const upstreamDns = adguard.upstreamDns;
+  const bootstrapDns = adguard.bootstrapDns;
+  const upstreamMode = adguard.upstreamMode;
+  const rewrites = validateArtifactSource(
+    adguard.rewrites,
+    `${sourcePath}: adguard.rewrites`,
+    sourcePath
+  );
 
   if (typeof querylogInterval !== "string" || !/^[1-9]\d*(?:h|d)$/u.test(querylogInterval)) {
     throw new Error(`${sourcePath}: adguard.querylogInterval must be a positive number of hours or days`);
@@ -95,17 +161,33 @@ export function parseProjectConfig(sourceYaml, sourcePath = "config.yaml") {
     );
   }
 
-  if (typeof profile !== "string" || !/^[\w.-]+$/u.test(profile)) {
-    throw new Error(`${sourcePath}: singboxctl.profile must be a profile name`);
-  }
+  return {
+    rewrites,
+    querylogInterval,
+    webPort,
+    dnsPort,
+    upstreamDns: validatedUpstreamDns,
+    bootstrapDns: validatedBootstrapDns,
+    upstreamMode
+  };
+}
 
-  if (typeof ruleSetsDirectory !== "string" || ruleSetsDirectory.length === 0) {
-    throw new Error(`${sourcePath}: singboxctl.ruleSetsDirectory must be a path`);
-  }
+function validateNfqws2(nfqws2, sourcePath) {
+  rejectUnknownFields(
+    nfqws2,
+    ["resources", "filter", "filterL7", "strategy", "test"],
+    `${sourcePath}: nfqws2`
+  );
 
-  if (typeof backupDirectory !== "string" || backupDirectory.length === 0) {
-    throw new Error(`${sourcePath}: backup.directory must be a path`);
-  }
+  const filter = nfqws2.filter;
+  const filterL7 = nfqws2.filterL7;
+  const strategy = nfqws2.strategy;
+  const nfqws2Test = nfqws2.test;
+  const resources = validateArtifactSource(
+    nfqws2.resources,
+    `${sourcePath}: nfqws2.resources`,
+    sourcePath
+  );
 
   if (!isRecord(filter)) {
     throw new Error(`${sourcePath}: nfqws2.filter must be a mapping`);
@@ -136,31 +218,78 @@ export function parseProjectConfig(sourceYaml, sourcePath = "config.yaml") {
   );
 
   return {
-    openwrt: { endpoint, sshPort, remoteTmpDir },
-    adguard: {
-      rewriteIp,
-      querylogInterval,
-      webPort,
-      dnsPort,
-      upstreamDns: validatedUpstreamDns,
-      bootstrapDns: validatedBootstrapDns,
-      upstreamMode
+    resources,
+    filter: {
+      tcp: tcpFilter,
+      udp: udpFilter
     },
-    singboxctl: {
-      profile,
-      ruleSetsDirectory: resolveConfigPath(ruleSetsDirectory, sourcePath)
-    },
-    backup: {
-      directory: resolveConfigPath(backupDirectory, sourcePath)
-    },
-    nfqws2: {
-      filter: {
-        tcp: tcpFilter,
-        udp: udpFilter
-      },
-      filterL7: { tcp: tcpL7Filter, udp: udpL7Filter },
-      strategy: { http: httpStrategy, https: httpsStrategy, udp: udpStrategy },
-      test: { httpsDomains }
+    filterL7: { tcp: tcpL7Filter, udp: udpL7Filter },
+    strategy: { http: httpStrategy, https: httpsStrategy, udp: udpStrategy },
+    test: { httpsDomains }
+  };
+}
+
+function validateArtifactSource(value, fieldName, sourcePath) {
+  if (value === undefined || value === null) {
+    throw new Error(`${fieldName}.path must be a non-empty path`);
+  }
+
+  if (!isRecord(value)) {
+    throw new Error(`${fieldName} must be a mapping`);
+  }
+
+  rejectUnknownFields(value, ["path", "prepare"], fieldName);
+
+  if (typeof value.path !== "string" || value.path.trim().length === 0) {
+    throw new Error(`${fieldName}.path must be a non-empty path`);
+  }
+
+  const artifact = { path: resolveConfigPath(value.path, sourcePath) };
+  if (value.prepare === undefined) {
+    return artifact;
+  }
+
+  if (!isRecord(value.prepare)) {
+    throw new Error(`${fieldName}.prepare must be a mapping`);
+  }
+
+  rejectUnknownFields(value.prepare, ["command", "cwd"], `${fieldName}.prepare`);
+
+  if (
+    Object.hasOwn(value.prepare, "cwd") &&
+    !Object.hasOwn(value.prepare, "command")
+  ) {
+    throw new Error(`${fieldName}.prepare.cwd requires ${fieldName}.prepare.command`);
+  }
+
+  const command = value.prepare.command;
+  if (
+    !Array.isArray(command) ||
+    command.length === 0 ||
+    command.some((argument) => typeof argument !== "string") ||
+    command[0].trim().length === 0
+  ) {
+    throw new Error(`${fieldName}.prepare.command must be a non-empty argv list of strings`);
+  }
+
+  if (command.some((argument) => argument.includes("{output}") && argument !== "{output}")) {
+    throw new Error(`${fieldName}.prepare.command must use {output} as a standalone argument`);
+  }
+
+  if (command.filter((argument) => argument === "{output}").length !== 1) {
+    throw new Error(`${fieldName}.prepare.command must contain exactly one {output} argument`);
+  }
+
+  const cwd = value.prepare.cwd;
+  if (cwd !== undefined && (typeof cwd !== "string" || cwd.trim().length === 0)) {
+    throw new Error(`${fieldName}.prepare.cwd must be a non-empty path`);
+  }
+
+  return {
+    ...artifact,
+    prepare: {
+      command: [...command],
+      cwd: resolveConfigPath(cwd ?? ".", sourcePath)
     }
   };
 }
@@ -175,6 +304,13 @@ function resolveConfigPath(value, sourcePath) {
   }
 
   return path.resolve(path.dirname(path.resolve(sourcePath)), value);
+}
+
+function rejectUnknownFields(value, allowedFields, fieldName) {
+  const unknownField = Object.keys(value).find((key) => !allowedFields.includes(key));
+  if (unknownField !== undefined) {
+    throw new Error(`${fieldName}.${unknownField} is not supported`);
+  }
 }
 
 function validatePortFilter(value, fieldName, allowRanges = false) {

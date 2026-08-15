@@ -32,7 +32,7 @@ const COMMANDS = new Map([
   ["sync-adguard", ["sync-adguard.js"]],
   ["sync-singbox", ["sync-singbox.js"]],
   ["sync-nfqws2", ["sync-nfqws2.js"]],
-  ["sync", ["sync-adguard.js", "sync-singbox.js", "sync-nfqws2.js"]]
+  ["sync", ["sync.js"]]
 ]);
 
 main().catch((error) => {

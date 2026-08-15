@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildConfigureDnsmasqCommand } from "./lib/adguard-lifecycle.js";
-import { applyAdguardConfigTransaction } from "./sync-adguard.js";
+import { applyAdguardConfigTransaction, prepareAdguardRewrites } from "./sync-adguard.js";
+
+test("rejects sync-adguard when its service section is omitted", async () => {
+  await assert.rejects(
+    prepareAdguardRewrites({ config: {}, configPath: "/config/config.yaml" }),
+    /sync-adguard requires an adguard section/u
+  );
+});
 
 test("restores the AdGuard config when readiness fails after restart", async () => {
   const calls = [];

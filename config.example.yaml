@@ -4,7 +4,11 @@ openwrt:
   remoteTmpDir: /tmp/openwrtctl
 
 adguard:
-  rewriteIp: 192.0.2.10
+  rewrites:
+    path: ./generated/adguard-rewrites.yaml
+    prepare:
+      command: [openwrtctl-adguard-rewrites, router, "{output}"]
+      cwd: .
   querylogInterval: 6h
   webPort: 8080
   dnsPort: 5353
@@ -14,14 +18,22 @@ adguard:
   bootstrapDns: [1.1.1.1, 1.0.0.1, 77.88.8.8, 77.88.8.1]
   upstreamMode: load_balance
 
-singboxctl:
-  profile: router
-  ruleSetsDirectory: ~/.config/singboxctl/rule-sets
+singbox:
+  config:
+    path: ./generated/sing-box.json
+    prepare:
+      command: [openwrtctl-singbox-config, router, "{output}"]
+      cwd: .
 
 backup:
   directory: ~/backups/openwrt
 
 nfqws2:
+  resources:
+    path: ./generated/nfqws2-resources.yaml
+    prepare:
+      command: [openwrtctl-nfqws2-resources, router, "{output}"]
+      cwd: .
   test:
     httpsDomains:
       - www.youtube.com

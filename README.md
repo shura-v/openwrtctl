@@ -10,8 +10,8 @@
 - устанавливает, обновляет, синхронизирует и удаляет AdGuard Home, sing-box и
   nfqws2;
 - создаёт и восстанавливает стандартные OpenWrt backup-архивы;
-- локально генерирует конфиги из профиля `singboxctl`, проверяет их на роутере
-  и только затем применяет.
+- принимает готовые локальные артефакты, проверяет их формат и только затем
+  валидирует и применяет конфигурацию на роутере.
 
 ## Граница поддержки
 
@@ -29,15 +29,73 @@ openwrtctl init
 ```
 
 `init` создаёт `~/.config/openwrtctl/config.yaml` из шаблона, выставляет права
-`0600` и сохраняет существующий файл без изменений. Заполните endpoint, AdGuard
-rewrite IP и DNS-настройки, профиль и каталог rule sets. В шаблоне уже задан
+`0600` и сохраняет существующий файл без изменений. Заполните endpoint и секции
+только тех сервисов, которыми должен управлять `openwrtctl`. В шаблоне уже задан
 `adguard.dnsPort: 5353`; `adguard.dnsPort`, `adguard.upstreamDns`,
 `adguard.bootstrapDns` и `adguard.upstreamMode` управляют соответствующими полями
-`dns.*` в AdGuard Home. Относительные пути разрешаются от каталога выбранного
-config-файла. `nfqws2.test.httpsDomains` задаёт непустой список доменов для
-HTTPS-проверки стратегий. В существующий config добавьте `adguard.dnsPort: 5353`
-и `nfqws2.test.httpsDomains: [www.youtube.com]` вручную: повторный `init` его не
-перезаписывает.
+`dns.*` в AdGuard Home. `nfqws2.test.httpsDomains` задаёт непустой список
+доменов для HTTPS-проверки стратегий.
+
+Секции `singbox`, `adguard` и `nfqws2` опциональны. Каждая присутствующая секция
+полностью валидируется и требует свой artifact `path`; service-команда для
+sync или другая команда, которой нужны её настройки, завершается явной ошибкой
+при отсутствии секции. Опциональный `prepare.command`
+задаётся argv-массивом и должен содержать ровно один отдельный аргумент
+`{output}`. Опциональный `prepare.cwd` задаёт рабочий каталог; по умолчанию
+используется каталог выбранного config-файла. Относительные пути разрешаются от
+этого каталога, `~` поддерживается явно.
+
+```yaml
+openwrt:
+  endpoint: root@192.168.1.1
+  sshPort: 22
+  remoteTmpDir: /tmp/openwrtctl
+
+backup:
+  directory: ~/backups/openwrt
+
+singbox:
+  config:
+    path: artifacts/sing-box.json
+    prepare:
+      command: [openwrtctl-singbox-config, router, "{output}"]
+```
+
+Это полный минимальный config для управления только sing-box. При необходимости
+добавляются независимые секции:
+
+```yaml
+adguard:
+  rewrites:
+    path: artifacts/adguard-rewrites.yaml
+    prepare:
+      command: [openwrtctl-adguard-rewrites, router, "{output}"]
+
+nfqws2:
+  resources:
+    path: artifacts/nfqws2-resources.yaml
+    prepare:
+      command: [openwrtctl-nfqws2-resources, router, "{output}"]
+```
+
+Без `prepare` существующий файл по `path` используется как статический input.
+Producer запускается напрямую, без shell-интерпретации. Его candidate проходит
+проверку до атомарной замены `path`; текущая синхронизация использует уже
+прочитанный snapshot. Доверяйте только собственным producer executable: команда
+работает с правами пользователя `openwrtctl` и может читать доступные ему файлы.
+
+Форматы артефактов:
+
+- `singbox.config.path` — полный финальный JSON sing-box, применяемый без
+  локального semantic patch;
+- `adguard.rewrites.path` — top-level YAML sequence нативных элементов
+  `filtering.rewrites` с полями `domain`, `answer` и опциональным `enabled`;
+  отсутствие `enabled` означает `true`;
+- `nfqws2.resources.path` — YAML mapping со строковыми массивами `userList` и
+  `ipsetList`.
+
+Полный producer contract и примеры форматов находятся в
+[`docs/artifact-producers.md`](docs/artifact-producers.md).
 
 ## Использование
 
@@ -68,9 +126,11 @@ openwrtctl doctor
 Команды по умолчанию читают `~/.config/openwrtctl/config.yaml`. Опция
 `--config /path/to/config.yaml` позволяет явно выбрать другой файл.
 
-Для выбранных сервисов доступны команды `install-*`, `update-*`, `uninstall-*`
-и `sync-*`. Общая команда `sync` последовательно синхронизирует AdGuard Home,
-sing-box и nfqws2.
+Для настроенных сервисов доступны команды `install-*`, `update-*`, `uninstall-*`
+и `sync-*`. Общая команда `sync` сначала подготавливает и проверяет snapshots
+всех присутствующих service-секций, затем применяет только их в порядке
+AdGuard Home, sing-box, nfqws2. Ошибка любого producer останавливает запуск до
+первого изменения роутера.
 
 `disable-singbox` — шаг аварийного отката: он останавливает sing-box, убирает
 автозапуск и сохраняет установленный пакет и конфиг для диагностики.
@@ -79,9 +139,9 @@ sing-box и nfqws2.
 таблицу, выставляет `NFQWS2_ENABLE=0`, сохраняя установку и конфиг. Следующий
 `sync-nfqws2` снова применяет рабочий конфиг и включает сервис.
 
-Router-конфиг ограничивает TUN входящим интерфейсом `br-lan`, исключает private
-сети, отключает `strict_route` и удаляет DNS hijack. Соединения самого роутера,
-включая AdGuard upstream и разрешение proxy endpoint, не направляются в TUN.
+Полный sing-box JSON принадлежит producer. `openwrtctl` сохраняет его TUN, DNS,
+outbounds и route rules без изменения и устанавливает только snapshot, успешно
+прошедший удалённую `sing-box check`.
 
 Установка nfqws2 принимает конкретную версию zapret2:
 
