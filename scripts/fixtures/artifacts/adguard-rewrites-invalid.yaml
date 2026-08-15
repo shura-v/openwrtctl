@@ -1,0 +1,4 @@
+- domain: example.ru
+  answer: 192.0.2.10
+- domain: example.ru
+  answer: 192.0.2.11

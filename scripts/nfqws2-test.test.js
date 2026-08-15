@@ -10,8 +10,23 @@ import {
   buildRemoteNfqws2TestResultsCommand,
   getNfqws2TestLogPath
 } from "./lib/nfqws2-test.js";
+import { testNfqws2 } from "./test-nfqws2.js";
 
 const execFileAsync = promisify(execFile);
+
+test("rejects test-nfqws2 when its service section is omitted", async () => {
+  const calls = [];
+
+  await assert.rejects(
+    testNfqws2({
+      config: { openwrt: { remoteTmpDir: "/root/tmp" } },
+      exec: async (command) => calls.push(command)
+    }),
+    /test-nfqws2 requires an nfqws2 section/u
+  );
+
+  assert.deepEqual(calls, []);
+});
 
 test("builds an HTTPS-only nfqws2 strategy test with service restoration", () => {
   const command = buildRemoteNfqws2TestCommand("/tmp/openwrtctl", [
