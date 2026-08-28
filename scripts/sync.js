@@ -2,13 +2,13 @@
 
 import { fileURLToPath } from "node:url";
 import { createRemote } from "./lib/remote.js";
-import { applyAdguardConfig, prepareAdguardRewrites } from "./sync-adguard.js";
+import { applyAdguardConfig, prepareAdguardArtifact } from "./sync-adguard.js";
 import { applyNfqws2Config, prepareNfqws2Resources } from "./sync-nfqws2.js";
 import { applySingboxConfig, prepareSingboxConfig } from "./sync-singbox.js";
 
 export async function syncAll({
   remote,
-  prepareAdguard = prepareAdguardRewrites,
+  prepareAdguard = prepareAdguardArtifact,
   prepareSingbox = prepareSingboxConfig,
   prepareNfqws2 = prepareNfqws2Resources,
   applyAdguard = applyAdguardConfig,

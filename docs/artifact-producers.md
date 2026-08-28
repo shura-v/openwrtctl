@@ -38,6 +38,17 @@ nfqws2:
       command: [openwrtctl-nfqws2-resources, router, "{output}"]
 ```
 
+Для AdGuard Home указывается ровно один источник: `rewrites` или `userRules`.
+Пользовательские фильтры подключаются так:
+
+```yaml
+adguard:
+  userRules:
+    path: artifacts/adguard-user-rules.yaml
+    prepare:
+      command: [openwrtctl-adguard-custom-rewrites, "{output}"]
+```
+
 Команды могут использовать собственные профили, каталоги правил и локальные
 секреты. Эти детали остаются за границей runtime-контракта `openwrtctl`.
 
@@ -59,6 +70,18 @@ AdGuard Home `filtering.rewrites`:
 boolean-поле `enabled` сохраняется; при отсутствии consumer устанавливает
 `enabled: true`. Повтор одного domain с разными answers является ошибкой.
 Пустой список задаётся как `[]`.
+
+Артефакт `adguard.userRules` — top-level YAML sequence непустых однострочных
+правил AdGuard Home:
+
+```yaml
+- "$dnsrewrite=192.0.2.10"
+- "@@||example.ru^$dnsrewrite"
+```
+
+Пустой список задаётся как `[]`. При синхронизации выбранный список полностью
+заменяется, а несовместимый список очищается: `rewrites` очищает корневой
+`user_rules`, `userRules` очищает `filtering.rewrites`.
 
 `openwrtctl-nfqws2-resources` создаёт YAML mapping из двух строковых списков:
 

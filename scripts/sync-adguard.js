@@ -1,27 +1,34 @@
 import { chmod, mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { generateAdguardConfig, parseAdguardRewrites } from "./adguard-config.js";
+import {
+  generateAdguardConfig,
+  parseAdguardRewrites,
+  parseAdguardUserRules
+} from "./adguard-config.js";
 import { createLocalAdguardBackup } from "./lib/adguard-backup.js";
 import { buildConfigureDnsmasqCommand } from "./lib/adguard-lifecycle.js";
 import { applyRemoteConfig, restoreRemoteConfig } from "./lib/adguard-remote-config.js";
 import { prepareLocalArtifact } from "./lib/local-artifact.js";
 import { createRemote } from "./lib/remote.js";
 
-export async function prepareAdguardRewrites({ config, configPath }) {
+export async function prepareAdguardArtifact({ config, configPath }) {
   if (!config.adguard) {
     throw new Error("sync-adguard requires an adguard section in the project config");
   }
 
-  return prepareLocalArtifact(config.adguard.rewrites, {
+  const mode = config.adguard.userRules ? "userRules" : "rewrites";
+  const artifact = await prepareLocalArtifact(config.adguard[mode], {
     configPath,
-    fieldName: "adguard.rewrites",
-    label: "AdGuard rewrites",
-    validate: parseAdguardRewrites
+    fieldName: `adguard.${mode}`,
+    label: mode === "rewrites" ? "AdGuard rewrites" : "AdGuard user rules",
+    validate: mode === "rewrites" ? parseAdguardRewrites : parseAdguardUserRules
   });
+
+  return { ...artifact, mode };
 }
 
-export async function applyAdguardConfig(remote, { validated: rewrites }) {
+export async function applyAdguardConfig(remote, { mode, validated }) {
   const adguardConfigPath = "/etc/adguardhome/adguardhome.yaml";
   const workDirectory = path.join(remote.localDirectory, ".work/adguard");
   const sourceConfigPath = path.join(workDirectory, "current.yaml");
@@ -39,7 +46,7 @@ export async function applyAdguardConfig(remote, { validated: rewrites }) {
     console.log(`Saved local AdGuard Home backup: ${backupPath}`);
     await generateAdguardConfig({
       sourcePath: sourceConfigPath,
-      rewrites,
+      [mode]: validated,
       querylogInterval: remote.config.adguard.querylogInterval,
       webPort: String(remote.config.adguard.webPort),
       dnsPort: String(remote.config.adguard.dnsPort),
@@ -70,7 +77,7 @@ export async function applyAdguardConfig(remote, { validated: rewrites }) {
 
 export async function main() {
   const remote = await createRemote();
-  const artifact = await prepareAdguardRewrites(remote);
+  const artifact = await prepareAdguardArtifact(remote);
   await applyAdguardConfig(remote, artifact);
 }
 

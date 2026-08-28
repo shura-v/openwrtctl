@@ -1,13 +1,35 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 import { buildConfigureDnsmasqCommand } from "./lib/adguard-lifecycle.js";
-import { applyAdguardConfigTransaction, prepareAdguardRewrites } from "./sync-adguard.js";
+import {
+  applyAdguardConfigTransaction,
+  prepareAdguardArtifact
+} from "./sync-adguard.js";
 
 test("rejects sync-adguard when its service section is omitted", async () => {
   await assert.rejects(
-    prepareAdguardRewrites({ config: {}, configPath: "/config/config.yaml" }),
+    prepareAdguardArtifact({ config: {}, configPath: "/config/config.yaml" }),
     /sync-adguard requires an adguard section/u
   );
+});
+
+test("prepares the configured AdGuard artifact mode", async (context) => {
+  const directory = await mkdtemp(path.join(tmpdir(), "sync-adguard-"));
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  const configPath = path.join(directory, "config.yaml");
+  const userRulesPath = path.join(directory, "user-rules.yaml");
+  await writeFile(userRulesPath, "- '$dnsrewrite=192.0.2.10'\n");
+
+  const artifact = await prepareAdguardArtifact({
+    config: { adguard: { userRules: { path: userRulesPath } } },
+    configPath
+  });
+
+  assert.equal(artifact.mode, "userRules");
+  assert.deepEqual(artifact.validated, ["$dnsrewrite=192.0.2.10"]);
 });
 
 test("restores the AdGuard config when readiness fails after restart", async () => {

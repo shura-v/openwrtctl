@@ -117,6 +117,7 @@ function validateAdguard(adguard, sourcePath) {
     adguard,
     [
       "rewrites",
+      "userRules",
       "querylogInterval",
       "webPort",
       "dnsPort",
@@ -132,10 +133,22 @@ function validateAdguard(adguard, sourcePath) {
   const dnsPort = adguard.dnsPort;
   const upstreamDns = adguard.upstreamDns;
   const bootstrapDns = adguard.bootstrapDns;
+  const hasBootstrapDns = Object.hasOwn(adguard, "bootstrapDns");
   const upstreamMode = adguard.upstreamMode;
-  const rewrites = validateArtifactSource(
-    adguard.rewrites,
-    `${sourcePath}: adguard.rewrites`,
+  const artifactFields = ["rewrites", "userRules"].filter((field) =>
+    Object.hasOwn(adguard, field)
+  );
+
+  if (artifactFields.length !== 1) {
+    throw new Error(
+      `${sourcePath}: adguard must contain exactly one of rewrites or userRules`
+    );
+  }
+
+  const artifactField = artifactFields[0];
+  const artifact = validateArtifactSource(
+    adguard[artifactField],
+    `${sourcePath}: adguard.${artifactField}`,
     sourcePath
   );
 
@@ -149,11 +162,13 @@ function validateAdguard(adguard, sourcePath) {
     upstreamDns,
     `${sourcePath}: adguard.upstreamDns`
   );
-  const validatedBootstrapDns = validateStringList(
-    bootstrapDns,
-    `${sourcePath}: adguard.bootstrapDns`,
-    true
-  );
+  const validatedBootstrapDns = hasBootstrapDns
+    ? validateStringList(
+      bootstrapDns,
+      `${sourcePath}: adguard.bootstrapDns`,
+      true
+    )
+    : undefined;
 
   if (!["load_balance", "parallel", "fastest_addr"].includes(upstreamMode)) {
     throw new Error(
@@ -162,12 +177,12 @@ function validateAdguard(adguard, sourcePath) {
   }
 
   return {
-    rewrites,
+    [artifactField]: artifact,
     querylogInterval,
     webPort,
     dnsPort,
     upstreamDns: validatedUpstreamDns,
-    bootstrapDns: validatedBootstrapDns,
+    ...(hasBootstrapDns ? { bootstrapDns: validatedBootstrapDns } : {}),
     upstreamMode
   };
 }
