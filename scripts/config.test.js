@@ -30,6 +30,18 @@ adguard:
   upstreamMode: load_balance
 `;
 
+const ADGUARD_USER_RULES_CONFIG = ADGUARD_CONFIG.replace(
+  `  rewrites:
+    path: ./generated/adguard-rewrites.yaml
+    prepare:
+      command: [openwrtctl-adguard-rewrites, router, "{output}"]
+      cwd: ./producers
+`,
+  `  userRules:
+    path: ./generated/adguard-user-rules.yaml
+`
+);
+
 const SINGBOX_CONFIG = `
 singbox:
   config:
@@ -117,6 +129,26 @@ test("parses the OpenWrt project config", () => {
       }
     }
   });
+});
+
+test("accepts omitted and explicitly empty AdGuard bootstrap DNS", () => {
+  const withoutBootstrapDns = parseProjectConfig(
+    `${COMMON_CONFIG}${ADGUARD_CONFIG.replace(
+      "  bootstrapDns: [1.1.1.1, 77.88.8.8]\n",
+      ""
+    )}`,
+    "/project/config.yaml"
+  );
+  const withEmptyBootstrapDns = parseProjectConfig(
+    `${COMMON_CONFIG}${ADGUARD_CONFIG.replace(
+      "bootstrapDns: [1.1.1.1, 77.88.8.8]",
+      "bootstrapDns: []"
+    )}`,
+    "/project/config.yaml"
+  );
+
+  assert.equal(Object.hasOwn(withoutBootstrapDns.adguard, "bootstrapDns"), false);
+  assert.deepEqual(withEmptyBootstrapDns.adguard.bootstrapDns, []);
 });
 
 test("accepts a singbox-only config and omits absent services", () => {
@@ -233,6 +265,40 @@ test("loads the example artifact sources and nfqws2 HTTPS test domain", async ()
   );
   assert.equal(parsed.singbox.config.prepare.cwd, PROJECT_DIRECTORY);
   assert.deepEqual(parsed.nfqws2.test.httpsDomains, ["www.youtube.com"]);
+});
+
+test("accepts exactly one AdGuard artifact source", () => {
+  const userRulesConfig = parseProjectConfig(
+    `${COMMON_CONFIG}${ADGUARD_USER_RULES_CONFIG}`,
+    "/project/config.yaml"
+  );
+
+  assert.deepEqual(userRulesConfig.adguard.userRules, {
+    path: "/project/generated/adguard-user-rules.yaml"
+  });
+  assert.equal(Object.hasOwn(userRulesConfig.adguard, "rewrites"), false);
+  assert.throws(
+    () =>
+      parseProjectConfig(
+        `${COMMON_CONFIG}${ADGUARD_CONFIG.replace(
+          "  querylogInterval:",
+          "  userRules:\n    path: ./generated/adguard-user-rules.yaml\n  querylogInterval:"
+        )}`,
+        "/project/config.yaml"
+      ),
+    /exactly one of rewrites or userRules/u
+  );
+  assert.throws(
+    () =>
+      parseProjectConfig(
+        `${COMMON_CONFIG}${ADGUARD_CONFIG.replace(
+          /  rewrites:\n(?:    .*\n){4}/u,
+          ""
+        )}`,
+        "/project/config.yaml"
+      ),
+    /exactly one of rewrites or userRules/u
+  );
 });
 
 test("rejects invalid project config values", () => {
@@ -363,15 +429,23 @@ test("requires an artifact path in every present service", () => {
       "adguard.rewrites.path"
     ],
     [
+      "  userRules:\n    path: ./generated/adguard-user-rules.yaml\n",
+      "  userRules:\n",
+      "adguard.userRules.path"
+    ],
+    [
       "  resources:\n    path: ./generated/nfqws2-resources.yaml\n",
       "  resources:\n",
       "nfqws2.resources.path"
     ]
   ]) {
+    const sourceConfig = fieldName === "adguard.userRules.path"
+      ? `${COMMON_CONFIG}${ADGUARD_USER_RULES_CONFIG}`
+      : CONFIG;
     assert.throws(
       () =>
         parseProjectConfig(
-          CONFIG.replace(artifactSource, sourceWithoutPath),
+          sourceConfig.replace(artifactSource, sourceWithoutPath),
           "/project/config.yaml"
         ),
       new RegExp(fieldName.replaceAll(".", "\\."), "u")

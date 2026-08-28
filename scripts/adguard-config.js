@@ -52,8 +52,29 @@ export function parseAdguardRewrites(sourceYaml) {
   return normalizedRewrites;
 }
 
+export function parseAdguardUserRules(sourceYaml) {
+  const document = parseDocument(decodeYaml(sourceYaml, "AdGuard user rules artifact"));
+
+  if (document.errors.length > 0) {
+    throw new Error(`Invalid AdGuard user rules YAML: ${document.errors[0].message}`);
+  }
+
+  const userRules = document.toJS();
+
+  if (!Array.isArray(userRules)) {
+    throw new Error("AdGuard user rules artifact must be a top-level YAML sequence");
+  }
+
+  for (const [index, userRule] of userRules.entries()) {
+    validateRewriteValue(userRule, `AdGuard user rules[${index}]`);
+  }
+
+  return userRules;
+}
+
 export function patchAdguardConfig(sourceYaml, {
   rewrites,
+  userRules,
   querylogInterval,
   webPort,
   dnsPort,
@@ -61,6 +82,15 @@ export function patchAdguardConfig(sourceYaml, {
   bootstrapDns,
   upstreamMode
 }) {
+  const artifactFields = [
+    rewrites !== undefined && "rewrites",
+    userRules !== undefined && "userRules"
+  ].filter(Boolean);
+
+  if (artifactFields.length !== 1) {
+    throw new Error("AdGuard config patch requires exactly one of rewrites or userRules");
+  }
+
   if (!/^[1-9]\d*(?:h|d)$/u.test(querylogInterval)) {
     throw new Error(
       `ADGUARD_QUERYLOG_INTERVAL must be a positive number of hours or days: ${JSON.stringify(querylogInterval)}`
@@ -99,10 +129,14 @@ export function patchAdguardConfig(sourceYaml, {
   }
 
   document.setIn(["dns", "upstream_dns"], upstreamDns);
-  document.setIn(["dns", "bootstrap_dns"], bootstrapDns);
+  document.setIn(
+    ["dns", "bootstrap_dns"],
+    bootstrapDns === undefined ? [] : bootstrapDns
+  );
   document.setIn(["dns", "upstream_mode"], upstreamMode);
   document.setIn(["dns", "port"], Number(dnsPort));
-  document.setIn(["filtering", "rewrites"], rewrites);
+  document.setIn(["filtering", "rewrites"], rewrites ?? []);
+  document.setIn(["user_rules"], userRules ?? []);
   document.setIn(["querylog", "interval"], querylogInterval);
   document.setIn(["http", "address"], replaceAddressPort(currentWebAddress, webPort));
 
@@ -114,6 +148,7 @@ export function patchAdguardConfig(sourceYaml, {
 export async function generateAdguardConfig({
   sourcePath,
   rewrites,
+  userRules,
   querylogInterval,
   webPort,
   dnsPort,
@@ -124,6 +159,7 @@ export async function generateAdguardConfig({
 }) {
   const patchedYaml = patchAdguardConfig(await readFile(sourcePath, "utf8"), {
     rewrites,
+    userRules,
     querylogInterval,
     webPort,
     dnsPort,
@@ -132,7 +168,10 @@ export async function generateAdguardConfig({
     upstreamMode
   });
   await writeFile(outputPath, patchedYaml, { encoding: "utf8", mode: 0o600 });
-  console.log(`Patched AdGuard Home config: ${rewrites.length} rewrites`);
+  const artifactSummary = rewrites === undefined
+    ? `${userRules.length} user rules`
+    : `${rewrites.length} rewrites`;
+  console.log(`Patched AdGuard Home config: ${artifactSummary}`);
 }
 
 async function main() {

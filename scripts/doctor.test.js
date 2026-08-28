@@ -6,6 +6,9 @@ test("reports router storage and managed service health", () => {
   const command = buildDoctorCommand();
 
   assert.match(command, /\/tmp\/sysinfo\/model/u);
+  assert.match(command, /\/proc\/cpuinfo/u);
+  assert.match(command, /uname -m/u);
+  assert.match(command, /CPU: %s/u);
   assert.match(command, /\/etc\/openwrt_release/u);
   assert.match(command, /df -h \/overlay/u);
   assert.match(command, /adguardhome sing-box zapret2/u);

@@ -1,6 +1,16 @@
 export function buildDoctorCommand() {
   return String.raw`
 model="$(cat /tmp/sysinfo/model 2>/dev/null || echo unknown)"
+cpu="$(awk '
+/^[[:space:]]*(model name|cpu model|Processor|uarch|cpu)[[:space:]]*:/ {
+  sub(/^[^:]*:[[:space:]]*/, "")
+  if (length) {
+    print
+    exit
+  }
+}' /proc/cpuinfo 2>/dev/null)"
+[ -n "$cpu" ] || cpu="$(uname -m 2>/dev/null || echo unknown)"
+[ -n "$cpu" ] || cpu=unknown
 release="$(. /etc/openwrt_release 2>/dev/null; echo "$DISTRIB_DESCRIPTION")"
 [ -n "$release" ] || release=unknown
 uptime_seconds="$(cut -d. -f1 /proc/uptime)"
@@ -10,6 +20,7 @@ uptime_minutes=$(((uptime_seconds % 3600) / 60))
 
 printf 'Router\n'
 printf '  Model: %s\n' "$model"
+printf '  CPU: %s\n' "$cpu"
 printf '  OpenWrt: %s\n' "$release"
 printf '  Uptime: %dd %dh %dm\n' "$uptime_days" "$uptime_hours" "$uptime_minutes"
 

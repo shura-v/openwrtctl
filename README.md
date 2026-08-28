@@ -31,10 +31,11 @@ openwrtctl init
 `init` создаёт `~/.config/openwrtctl/config.yaml` из шаблона, выставляет права
 `0600` и сохраняет существующий файл без изменений. Заполните endpoint и секции
 только тех сервисов, которыми должен управлять `openwrtctl`. В шаблоне уже задан
-`adguard.dnsPort: 5353`; `adguard.dnsPort`, `adguard.upstreamDns`,
-`adguard.bootstrapDns` и `adguard.upstreamMode` управляют соответствующими полями
-`dns.*` в AdGuard Home. `nfqws2.test.httpsDomains` задаёт непустой список
-доменов для HTTPS-проверки стратегий.
+`adguard.dnsPort: 5353`; `adguard.dnsPort`, `adguard.upstreamDns` и
+`adguard.upstreamMode` управляют соответствующими полями `dns.*` в AdGuard Home.
+Опциональный `adguard.bootstrapDns` заменяет `dns.bootstrap_dns`; при отсутствии
+поля синхронизация записывает пустой список. `nfqws2.test.httpsDomains` задаёт
+непустой список доменов для HTTPS-проверки стратегий.
 
 Секции `singbox`, `adguard` и `nfqws2` опциональны. Каждая присутствующая секция
 полностью валидируется и требует свой artifact `path`; service-команда для
@@ -78,6 +79,17 @@ nfqws2:
       command: [openwrtctl-nfqws2-resources, router, "{output}"]
 ```
 
+В секции `adguard` укажите ровно один источник правил. Для пользовательских
+фильтров AdGuard Home замените `rewrites` на `userRules`:
+
+```yaml
+adguard:
+  userRules:
+    path: artifacts/adguard-user-rules.yaml
+    prepare:
+      command: [openwrtctl-adguard-custom-rewrites, "{output}"]
+```
+
 Без `prepare` существующий файл по `path` используется как статический input.
 Producer запускается напрямую, без shell-интерпретации. Его candidate проходит
 проверку до атомарной замены `path`; текущая синхронизация использует уже
@@ -91,6 +103,8 @@ Producer запускается напрямую, без shell-интерпре�
 - `adguard.rewrites.path` — top-level YAML sequence нативных элементов
   `filtering.rewrites` с полями `domain`, `answer` и опциональным `enabled`;
   отсутствие `enabled` означает `true`;
+- `adguard.userRules.path` — top-level YAML sequence непустых однострочных
+  значений корневого списка `user_rules` AdGuard Home;
 - `nfqws2.resources.path` — YAML mapping со строковыми массивами `userList` и
   `ipsetList`.
 
@@ -111,13 +125,16 @@ openwrtctl sync
 его web-интерфейс и выберите DNS-порт `5353`, уже заданный в шаблоне.
 Последующий `sync-adguard` применяет `adguard.dnsPort` к `dns.port` AdGuard Home
 и направляет стандартный upstream `dnsmasq` на `127.0.0.1:<adguard.dnsPort>`.
+В режиме `adguard.rewrites` синхронизация заменяет `filtering.rewrites` и очищает
+`user_rules`. В режиме `adguard.userRules` она заменяет `user_rules` и очищает
+`filtering.rewrites`, поэтому ручные и обычные rewrite-правила не смешиваются.
 Если в `dnsmasq` уже задан пользовательский upstream, синхронизация завершится
 ошибкой и сохранит его без изменений. `uninstall-adguard` восстанавливает
 стандартный upstream OpenWrt до остановки AdGuard Home.
 
 Для быстрой read-only проверки роутера используйте `doctor`. Команда показывает
-модель, версию OpenWrt, uptime, источник и свободное место overlay, а также
-состояние AdGuard Home, sing-box и zapret2:
+модель, процессор, версию OpenWrt, uptime, источник и свободное место overlay,
+а также состояние AdGuard Home, sing-box и zapret2:
 
 ```sh
 openwrtctl doctor

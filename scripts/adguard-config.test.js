@@ -7,6 +7,7 @@ import { parse } from "yaml";
 import {
   generateAdguardConfig,
   parseAdguardRewrites,
+  parseAdguardUserRules,
   patchAdguardConfig
 } from "./adguard-config.js";
 
@@ -24,7 +25,11 @@ dns:
   cache_size: 1234
 filtering:
   filtering_enabled: true
-  rewrites: []
+  rewrites:
+    - domain: old.example
+      answer: 192.0.2.20
+user_rules:
+  - old-rule
 querylog:
   interval: 90d
   size_memory: 1000
@@ -72,6 +77,25 @@ test("rejects malformed and conflicting AdGuard rewrites", () => {
   );
 });
 
+test("parses AdGuard user rule sequences", () => {
+  assert.deepEqual(parseAdguardUserRules("- '$dnsrewrite=192.0.2.10'\n"), [
+    "$dnsrewrite=192.0.2.10"
+  ]);
+  assert.deepEqual(parseAdguardUserRules("[]\n"), []);
+  assert.throws(
+    () => parseAdguardUserRules("rule: value\n"),
+    /top-level YAML sequence/u
+  );
+  assert.throws(
+    () => parseAdguardUserRules("- ''\n"),
+    /user rules\[0\]/u
+  );
+  assert.throws(
+    () => parseAdguardUserRules("- ' padded '\n"),
+    /user rules\[0\]/u
+  );
+});
+
 test("patches only managed AdGuard Home fields", () => {
   const rewrites = parseAdguardRewrites(REWRITES_YAML);
   const upstreamDns = ["tls://dns.example"];
@@ -99,6 +123,7 @@ test("patches only managed AdGuard Home fields", () => {
   assert.deepEqual(result.dns.bootstrap_dns, bootstrapDns);
   assert.equal(result.dns.upstream_mode, "fastest_addr");
   assert.deepEqual(result.filtering.rewrites, rewrites);
+  assert.deepEqual(result.user_rules, []);
 
   const withoutRewrites = parse(
     patchAdguardConfig(SOURCE_CONFIG, {
@@ -112,6 +137,65 @@ test("patches only managed AdGuard Home fields", () => {
     })
   );
   assert.deepEqual(withoutRewrites.filtering.rewrites, []);
+});
+
+test("writes empty AdGuard bootstrap DNS when omitted or explicitly empty", () => {
+  const settings = {
+    rewrites: [],
+    querylogInterval: "6h",
+    webPort: "8080",
+    dnsPort: "5353",
+    upstreamDns: ["tls://dns.example"],
+    upstreamMode: "fastest_addr"
+  };
+  const defaulted = parse(patchAdguardConfig(SOURCE_CONFIG, settings));
+  const cleared = parse(
+    patchAdguardConfig(SOURCE_CONFIG, { ...settings, bootstrapDns: [] })
+  );
+
+  assert.deepEqual(defaulted.dns.bootstrap_dns, []);
+  assert.deepEqual(cleared.dns.bootstrap_dns, []);
+});
+
+test("user rules mode replaces root user_rules and clears filtering.rewrites", () => {
+  const userRules = parseAdguardUserRules(`
+- "$dnsrewrite=192.0.2.10"
+- "@@||example.ru^$dnsrewrite"
+`);
+  const result = parse(
+    patchAdguardConfig(SOURCE_CONFIG, {
+      userRules,
+      querylogInterval: "6h",
+      webPort: "8080",
+      dnsPort: "5353",
+      upstreamDns: ["tls://dns.example"],
+      bootstrapDns: ["192.0.2.54"],
+      upstreamMode: "fastest_addr"
+    })
+  );
+
+  assert.deepEqual(result.user_rules, userRules);
+  assert.deepEqual(result.filtering.rewrites, []);
+});
+
+test("requires exactly one managed AdGuard artifact", () => {
+  const settings = {
+    querylogInterval: "6h",
+    webPort: "8080",
+    dnsPort: "5353",
+    upstreamDns: ["tls://dns.example"],
+    bootstrapDns: ["192.0.2.54"],
+    upstreamMode: "load_balance"
+  };
+
+  assert.throws(
+    () => patchAdguardConfig(SOURCE_CONFIG, settings),
+    /exactly one of rewrites or userRules/u
+  );
+  assert.throws(
+    () => patchAdguardConfig(SOURCE_CONFIG, { ...settings, rewrites: [], userRules: [] }),
+    /exactly one of rewrites or userRules/u
+  );
 });
 
 test("writes a patched config from an already parsed rewrite snapshot", async (context) => {
