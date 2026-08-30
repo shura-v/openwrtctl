@@ -91,15 +91,21 @@ export function patchAdguardConfig(sourceYaml, settingsAndRules) {
   const {
     querylogInterval,
     webPort,
-    dnsPort,
-    upstreamDns,
-    bootstrapDns,
-    upstreamMode,
-    rateLimit,
-    rateLimitSubnetLenIpv4,
-    rateLimitSubnetLenIpv6,
-    rateLimitWhitelist,
-    ednsClientSubnet
+    dns: {
+      port,
+      upstreamDns,
+      bootstrapDns,
+      upstreamMode,
+      rateLimit,
+      rateLimitSubnetLenIpv4,
+      rateLimitSubnetLenIpv6,
+      rateLimitWhitelist,
+      ednsClientSubnet,
+      cacheSize,
+      cacheTtlMin,
+      cacheTtlMax,
+      cacheOptimistic
+    }
   } = parseAdguardSettings(settingsInput, {
     cliNames: true,
     includeValue: true
@@ -131,16 +137,20 @@ export function patchAdguardConfig(sourceYaml, settingsAndRules) {
   document.setIn(["dns", "upstream_dns"], upstreamDns);
   document.setIn(["dns", "bootstrap_dns"], bootstrapDns);
   document.setIn(["dns", "upstream_mode"], upstreamMode);
-  document.setIn(["dns", "port"], dnsPort);
+  document.setIn(["dns", "port"], port);
   document.setIn(["dns", "ratelimit"], rateLimit);
   document.setIn(["dns", "ratelimit_subnet_len_ipv4"], rateLimitSubnetLenIpv4);
   document.setIn(["dns", "ratelimit_subnet_len_ipv6"], rateLimitSubnetLenIpv6);
   document.setIn(["dns", "ratelimit_whitelist"], rateLimitWhitelist);
   document.setIn(["dns", "edns_client_subnet"], {
-    enabled: ednsClientSubnet,
-    use_custom: false,
-    custom_ip: ""
+    enabled: ednsClientSubnet.enabled,
+    use_custom: ednsClientSubnet.useCustom,
+    custom_ip: ednsClientSubnet.customIp
   });
+  document.setIn(["dns", "cache_size"], cacheSize);
+  document.setIn(["dns", "cache_ttl_min"], cacheTtlMin);
+  document.setIn(["dns", "cache_ttl_max"], cacheTtlMax);
+  document.setIn(["dns", "cache_optimistic"], cacheOptimistic);
   document.setIn(["filtering", "rewrites"], rewrites ?? []);
   document.setIn(["user_rules"], userRules ?? []);
   document.setIn(["querylog", "interval"], querylogInterval);
@@ -157,15 +167,7 @@ export async function generateAdguardConfig({
   userRules,
   querylogInterval,
   webPort,
-  dnsPort,
-  upstreamDns,
-  bootstrapDns,
-  upstreamMode,
-  rateLimit,
-  rateLimitSubnetLenIpv4,
-  rateLimitSubnetLenIpv6,
-  rateLimitWhitelist,
-  ednsClientSubnet,
+  dns,
   outputPath
 }) {
   const patchedYaml = patchAdguardConfig(await readFile(sourcePath, "utf8"), {
@@ -173,15 +175,7 @@ export async function generateAdguardConfig({
     userRules,
     querylogInterval,
     webPort,
-    dnsPort,
-    upstreamDns,
-    bootstrapDns,
-    upstreamMode,
-    rateLimit,
-    rateLimitSubnetLenIpv4,
-    rateLimitSubnetLenIpv6,
-    rateLimitWhitelist,
-    ednsClientSubnet
+    dns
   });
   await writeFile(outputPath, patchedYaml, { encoding: "utf8", mode: 0o600 });
   const artifactSummary = rewrites !== undefined
@@ -198,16 +192,8 @@ async function main() {
     rewritesPath,
     querylogInterval,
     webPort,
-    dnsPort,
-    upstreamDnsJson,
-    bootstrapDnsJson,
-    upstreamMode,
-    outputPath,
-    rateLimit,
-    rateLimitSubnetLenIpv4,
-    rateLimitSubnetLenIpv6,
-    rateLimitWhitelistJson,
-    ednsClientSubnet
+    dnsJson,
+    outputPath
   ] = process.argv.slice(2);
 
   if (
@@ -215,14 +201,11 @@ async function main() {
     !rewritesPath ||
     !querylogInterval ||
     !webPort ||
-    !dnsPort ||
-    !upstreamDnsJson ||
-    !bootstrapDnsJson ||
-    !upstreamMode ||
+    !dnsJson ||
     !outputPath
   ) {
     throw new Error(
-      "Usage: adguard-config.js <source-yaml> <rewrites-yaml-or-> <querylog-interval> <web-port> <dns-port> <upstream-dns-json> <bootstrap-dns-json> <upstream-mode> <output-yaml> [rate-limit] [ipv4-prefix] [ipv6-prefix] [rate-limit-whitelist-json] [edns-client-subnet]"
+      "Usage: adguard-config.js <source-yaml> <rewrites-yaml-or-> <querylog-interval> <web-port> <dns-json> <output-yaml>"
     );
   }
 
@@ -235,18 +218,7 @@ async function main() {
     ...rules,
     querylogInterval,
     webPort: parseCliNumber(webPort),
-    dnsPort: parseCliNumber(dnsPort),
-    upstreamDns: parseCliJson(upstreamDnsJson, "ADGUARD_UPSTREAM_DNS"),
-    bootstrapDns: parseCliJson(bootstrapDnsJson, "ADGUARD_BOOTSTRAP_DNS"),
-    upstreamMode,
-    rateLimit: parseCliNumber(rateLimit),
-    rateLimitSubnetLenIpv4: parseCliNumber(rateLimitSubnetLenIpv4),
-    rateLimitSubnetLenIpv6: parseCliNumber(rateLimitSubnetLenIpv6),
-    rateLimitWhitelist: parseCliJson(
-      rateLimitWhitelistJson,
-      "ADGUARD_RATE_LIMIT_WHITELIST"
-    ),
-    ednsClientSubnet: parseCliBoolean(ednsClientSubnet),
+    dns: parseCliJson(dnsJson, "ADGUARD_DNS"),
     outputPath
   });
 }
@@ -271,22 +243,6 @@ function parseCliJson(value, fieldName) {
       `${fieldName} must be valid JSON: ${error instanceof Error ? error.message : String(error)}`
     );
   }
-}
-
-function parseCliBoolean(value) {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (value === "true") {
-    return true;
-  }
-
-  if (value === "false") {
-    return false;
-  }
-
-  return value;
 }
 
 function validateRewriteValue(value, fieldName) {

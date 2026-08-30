@@ -70,15 +70,7 @@ export async function applyAdguardConfig(remote, { mode, validated }) {
       ...rules,
       querylogInterval: remote.config.adguard.querylogInterval,
       webPort: remote.config.adguard.webPort,
-      dnsPort: remote.config.adguard.dnsPort,
-      upstreamDns: remote.config.adguard.upstreamDns,
-      bootstrapDns: remote.config.adguard.bootstrapDns,
-      upstreamMode: remote.config.adguard.upstreamMode,
-      rateLimit: remote.config.adguard.rateLimit,
-      rateLimitSubnetLenIpv4: remote.config.adguard.rateLimitSubnetLenIpv4,
-      rateLimitSubnetLenIpv6: remote.config.adguard.rateLimitSubnetLenIpv6,
-      rateLimitWhitelist: remote.config.adguard.rateLimitWhitelist,
-      ednsClientSubnet: remote.config.adguard.ednsClientSubnet,
+      dns: remote.config.adguard.dns,
       outputPath: patchedConfigPath
     });
     await remote.push(patchedConfigPath, remoteStagedConfigPath);
@@ -91,7 +83,7 @@ export async function applyAdguardConfig(remote, { mode, validated }) {
       adguardConfigPath,
       configureDnsmasqCommand: buildConfigureDnsmasqCommand(
         remote.config.openwrt.remoteTmpDir,
-        remote.config.adguard.dnsPort
+        remote.config.adguard.dns.port
       )
     });
   } finally {

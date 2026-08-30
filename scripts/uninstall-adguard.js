@@ -10,7 +10,7 @@ export async function uninstallAdguard(remote) {
   await remote.exec(
     buildUninstallAdguardCommand(
       remote.config.openwrt.remoteTmpDir,
-      remote.config.adguard.dnsPort
+      remote.config.adguard.dns.port
     )
   );
   console.log("Uninstalled AdGuard Home and removed its managed dnsmasq upstream.");

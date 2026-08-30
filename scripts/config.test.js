@@ -24,22 +24,31 @@ adguard:
       cwd: ./producers
   querylogInterval: 6h
   webPort: 8080
-  dnsPort: 5353
-  upstreamDns: [https://cloudflare-dns.com/dns-query, tls://common.dot.dns.yandex.net]
-  bootstrapDns: [1.1.1.1, 77.88.8.8]
-  upstreamMode: load_balance
-  rateLimit: 0
-  rateLimitSubnetLenIpv4: 24
-  rateLimitSubnetLenIpv6: 56
-  rateLimitWhitelist: []
-  ednsClientSubnet: false
+  dns:
+    port: 5353
+    upstreamDns: [https://cloudflare-dns.com/dns-query, tls://common.dot.dns.yandex.net]
+    bootstrapDns: [1.1.1.1, 77.88.8.8]
+    upstreamMode: load_balance
+    rateLimit: 0
+    rateLimitSubnetLenIpv4: 24
+    rateLimitSubnetLenIpv6: 56
+    rateLimitWhitelist: []
+    ednsClientSubnet:
+      enabled: false
+      useCustom: false
+      customIp: ""
+    cacheSize: 4194304
+    cacheTtlMin: 30
+    cacheTtlMax: 60
+    cacheOptimistic: true
 `;
 
 const MINIMAL_ADGUARD_CONFIG = `
 adguard:
   webPort: 8080
-  dnsPort: 5353
-  upstreamDns: [https://cloudflare-dns.com/dns-query]
+  dns:
+    port: 5353
+    upstreamDns: [https://cloudflare-dns.com/dns-query]
 `;
 
 const ADGUARD_USER_RULES_CONFIG = ADGUARD_CONFIG.replace(
@@ -99,18 +108,28 @@ test("parses the OpenWrt project config", () => {
       },
       querylogInterval: "6h",
       webPort: 8080,
-      dnsPort: 5353,
-      upstreamDns: [
-        "https://cloudflare-dns.com/dns-query",
-        "tls://common.dot.dns.yandex.net"
-      ],
-      bootstrapDns: ["1.1.1.1", "77.88.8.8"],
-      upstreamMode: "load_balance",
-      rateLimit: 0,
-      rateLimitSubnetLenIpv4: 24,
-      rateLimitSubnetLenIpv6: 56,
-      rateLimitWhitelist: [],
-      ednsClientSubnet: false
+      dns: {
+        port: 5353,
+        upstreamDns: [
+          "https://cloudflare-dns.com/dns-query",
+          "tls://common.dot.dns.yandex.net"
+        ],
+        bootstrapDns: ["1.1.1.1", "77.88.8.8"],
+        upstreamMode: "load_balance",
+        rateLimit: 0,
+        rateLimitSubnetLenIpv4: 24,
+        rateLimitSubnetLenIpv6: 56,
+        rateLimitWhitelist: [],
+        ednsClientSubnet: {
+          enabled: false,
+          useCustom: false,
+          customIp: ""
+        },
+        cacheSize: 4_194_304,
+        cacheTtlMin: 30,
+        cacheTtlMax: 60,
+        cacheOptimistic: true
+      }
     },
     singbox: {
       config: {
@@ -157,15 +176,25 @@ test("defaults every optional AdGuard setting in settings-only mode", () => {
   assert.deepEqual(parsed.adguard, {
     querylogInterval: "6h",
     webPort: 8080,
-    dnsPort: 5353,
-    upstreamDns: ["https://cloudflare-dns.com/dns-query"],
-    bootstrapDns: [],
-    upstreamMode: "load_balance",
-    rateLimit: 0,
-    rateLimitSubnetLenIpv4: 24,
-    rateLimitSubnetLenIpv6: 56,
-    rateLimitWhitelist: [],
-    ednsClientSubnet: false
+    dns: {
+      port: 5353,
+      upstreamDns: ["https://cloudflare-dns.com/dns-query"],
+      bootstrapDns: [],
+      upstreamMode: "load_balance",
+      rateLimit: 0,
+      rateLimitSubnetLenIpv4: 24,
+      rateLimitSubnetLenIpv6: 56,
+      rateLimitWhitelist: [],
+      ednsClientSubnet: {
+        enabled: false,
+        useCustom: false,
+        customIp: ""
+      },
+      cacheSize: 4_194_304,
+      cacheTtlMin: 0,
+      cacheTtlMax: 0,
+      cacheOptimistic: false
+    }
   });
   assert.equal(Object.hasOwn(parsed.adguard, "rewrites"), false);
   assert.equal(Object.hasOwn(parsed.adguard, "userRules"), false);
@@ -173,14 +202,24 @@ test("defaults every optional AdGuard setting in settings-only mode", () => {
 
 test("preserves explicit optional AdGuard settings", () => {
   const parsed = parseProjectConfig(
-    `${COMMON_CONFIG}${MINIMAL_ADGUARD_CONFIG}  querylogInterval: 2d
-  bootstrapDns: [9.9.9.9]
-  upstreamMode: parallel
-  rateLimit: 100
-  rateLimitSubnetLenIpv4: 32
-  rateLimitSubnetLenIpv6: 64
-  rateLimitWhitelist: [192.0.2.1, "2001:db8::/32"]
-  ednsClientSubnet: true
+    `${COMMON_CONFIG}${MINIMAL_ADGUARD_CONFIG.replace(
+      "    upstreamDns: [https://cloudflare-dns.com/dns-query]",
+      `    upstreamDns: [https://cloudflare-dns.com/dns-query]
+    bootstrapDns: [9.9.9.9]
+    upstreamMode: parallel
+    rateLimit: 100
+    rateLimitSubnetLenIpv4: 32
+    rateLimitSubnetLenIpv6: 64
+    rateLimitWhitelist: [192.0.2.1, "2001:db8::/32"]
+    ednsClientSubnet:
+      enabled: true
+      useCustom: true
+      customIp: 192.0.2.44
+    cacheSize: 8388608
+    cacheTtlMin: 30
+    cacheTtlMax: 60
+    cacheOptimistic: true`
+    )}  querylogInterval: 2d
 `,
     "/project/config.yaml"
   );
@@ -188,22 +227,32 @@ test("preserves explicit optional AdGuard settings", () => {
   assert.deepEqual(parsed.adguard, {
     querylogInterval: "2d",
     webPort: 8080,
-    dnsPort: 5353,
-    upstreamDns: ["https://cloudflare-dns.com/dns-query"],
-    bootstrapDns: ["9.9.9.9"],
-    upstreamMode: "parallel",
-    rateLimit: 100,
-    rateLimitSubnetLenIpv4: 32,
-    rateLimitSubnetLenIpv6: 64,
-    rateLimitWhitelist: ["192.0.2.1", "2001:db8::/32"],
-    ednsClientSubnet: true
+    dns: {
+      port: 5353,
+      upstreamDns: ["https://cloudflare-dns.com/dns-query"],
+      bootstrapDns: ["9.9.9.9"],
+      upstreamMode: "parallel",
+      rateLimit: 100,
+      rateLimitSubnetLenIpv4: 32,
+      rateLimitSubnetLenIpv6: 64,
+      rateLimitWhitelist: ["192.0.2.1", "2001:db8::/32"],
+      ednsClientSubnet: {
+        enabled: true,
+        useCustom: true,
+        customIp: "192.0.2.44"
+      },
+      cacheSize: 8_388_608,
+      cacheTtlMin: 30,
+      cacheTtlMax: 60,
+      cacheOptimistic: true
+    }
   });
 });
 
 test("accepts omitted and explicitly empty AdGuard DNS lists", () => {
   const withoutBootstrapDns = parseProjectConfig(
     `${COMMON_CONFIG}${ADGUARD_CONFIG.replace(
-      "  bootstrapDns: [1.1.1.1, 77.88.8.8]\n",
+      "    bootstrapDns: [1.1.1.1, 77.88.8.8]\n",
       ""
     )}`,
     "/project/config.yaml"
@@ -216,9 +265,9 @@ test("accepts omitted and explicitly empty AdGuard DNS lists", () => {
     "/project/config.yaml"
   );
 
-  assert.deepEqual(withoutBootstrapDns.adguard.bootstrapDns, []);
-  assert.deepEqual(withEmptyBootstrapDns.adguard.bootstrapDns, []);
-  assert.deepEqual(withoutBootstrapDns.adguard.rateLimitWhitelist, []);
+  assert.deepEqual(withoutBootstrapDns.adguard.dns.bootstrapDns, []);
+  assert.deepEqual(withEmptyBootstrapDns.adguard.dns.bootstrapDns, []);
+  assert.deepEqual(withoutBootstrapDns.adguard.dns.rateLimitWhitelist, []);
 });
 
 test("accepts a singbox-only config and omits absent services", () => {
@@ -286,10 +335,10 @@ test("validates every optional service independently", () => {
       "adguard",
       ADGUARD_CONFIG,
       ADGUARD_CONFIG.replace(
-        "  upstreamDns: [https://cloudflare-dns.com/dns-query, tls://common.dot.dns.yandex.net]",
-        "  upstreamDns: []"
+        "    upstreamDns: [https://cloudflare-dns.com/dns-query, tls://common.dot.dns.yandex.net]",
+        "    upstreamDns: []"
       ),
-      /adguard\.upstreamDns/u
+      /adguard\.dns\.upstreamDns/u
     ],
     [
       "nfqws2",
@@ -338,23 +387,30 @@ test("loads the example artifact sources and nfqws2 HTTPS test domain", async ()
   assert.deepEqual(
     {
       querylogInterval: parsed.adguard.querylogInterval,
-      bootstrapDns: parsed.adguard.bootstrapDns,
-      upstreamMode: parsed.adguard.upstreamMode,
-      rateLimit: parsed.adguard.rateLimit,
-      rateLimitSubnetLenIpv4: parsed.adguard.rateLimitSubnetLenIpv4,
-      rateLimitSubnetLenIpv6: parsed.adguard.rateLimitSubnetLenIpv6,
-      rateLimitWhitelist: parsed.adguard.rateLimitWhitelist,
-      ednsClientSubnet: parsed.adguard.ednsClientSubnet
+      ...parsed.adguard.dns
     },
     {
       querylogInterval: "6h",
+      port: 5353,
+      upstreamDns: [
+        "https://cloudflare-dns.com/dns-query",
+        "tls://common.dot.dns.yandex.net"
+      ],
       bootstrapDns: [],
       upstreamMode: "load_balance",
       rateLimit: 0,
       rateLimitSubnetLenIpv4: 24,
       rateLimitSubnetLenIpv6: 56,
       rateLimitWhitelist: [],
-      ednsClientSubnet: false
+      ednsClientSubnet: {
+        enabled: false,
+        useCustom: false,
+        customIp: ""
+      },
+      cacheSize: 4_194_304,
+      cacheTtlMin: 0,
+      cacheTtlMax: 0,
+      cacheOptimistic: false
     }
   );
 });
@@ -382,32 +438,97 @@ test("accepts at most one AdGuard artifact source", () => {
   );
 });
 
-test("validates AdGuard rate-limit and EDNS settings", () => {
+test("validates AdGuard DNS, rate-limit, EDNS, and cache settings", () => {
   for (const [field, invalidValues] of [
     ["rateLimit", ["-1", "1.5", "'1'"]],
     ["rateLimitSubnetLenIpv4", ["-1", "33", "1.5"]],
     ["rateLimitSubnetLenIpv6", ["-1", "129", "1.5"]],
     ["rateLimitWhitelist", ["192.0.2.1", "[192.0.2.1, '']"]],
-    ["ednsClientSubnet", ["0", "'false'"]]
+    ["cacheSize", ["-1", "1.5", "'4194304'"]],
+    ["cacheOptimistic", ["0", "'false'"]]
   ]) {
     for (const invalidValue of invalidValues) {
       assert.throws(
         () =>
           parseProjectConfig(
-            `${COMMON_CONFIG}${MINIMAL_ADGUARD_CONFIG}  ${field}: ${invalidValue}\n`,
+            `${COMMON_CONFIG}${MINIMAL_ADGUARD_CONFIG.replace(
+              "    upstreamDns: [https://cloudflare-dns.com/dns-query]",
+              `    upstreamDns: [https://cloudflare-dns.com/dns-query]\n    ${field}: ${invalidValue}`
+            )}`,
             "/project/config.yaml"
           ),
-        new RegExp(`adguard\\.${field}`, "u")
+        new RegExp(`adguard\\.dns\\.${field}`, "u")
       );
     }
   }
 
   assert.deepEqual(
     parseProjectConfig(
-      `${COMMON_CONFIG}${MINIMAL_ADGUARD_CONFIG}  rateLimitWhitelist: []\n`,
+      `${COMMON_CONFIG}${MINIMAL_ADGUARD_CONFIG.replace(
+        "    upstreamDns: [https://cloudflare-dns.com/dns-query]",
+        "    upstreamDns: [https://cloudflare-dns.com/dns-query]\n    rateLimitWhitelist: []"
+      )}`,
       "/project/config.yaml"
-    ).adguard.rateLimitWhitelist,
+    ).adguard.dns.rateLimitWhitelist,
     []
+  );
+
+  assert.throws(
+    () => parseProjectConfig(
+      `${COMMON_CONFIG}${MINIMAL_ADGUARD_CONFIG.replace(
+        "    upstreamDns: [https://cloudflare-dns.com/dns-query]",
+        `    upstreamDns: [https://cloudflare-dns.com/dns-query]
+    ednsClientSubnet:
+      enabled: true
+      useCustom: true
+      customIp: invalid`
+      )}`,
+      "/project/config.yaml"
+    ),
+    /adguard\.dns\.ednsClientSubnet\.customIp/u
+  );
+  assert.throws(
+    () => parseProjectConfig(
+      `${COMMON_CONFIG}${MINIMAL_ADGUARD_CONFIG.replace(
+        "    upstreamDns: [https://cloudflare-dns.com/dns-query]",
+        `    upstreamDns: [https://cloudflare-dns.com/dns-query]
+    cacheTtlMin: 60
+    cacheTtlMax: 30`
+      )}`,
+      "/project/config.yaml"
+    ),
+    /adguard\.dns\.cacheTtlMin/u
+  );
+});
+
+test("requires nested AdGuard DNS and rejects removed flat fields", () => {
+  assert.throws(
+    () => parseProjectConfig(
+      `${COMMON_CONFIG}adguard:\n  webPort: 8080\n`,
+      "/project/config.yaml"
+    ),
+    /adguard\.dns must be a mapping/u
+  );
+
+  for (const field of ["dnsPort", "upstreamDns", "cacheSize"]) {
+    assert.throws(
+      () => parseProjectConfig(
+        `${COMMON_CONFIG}${MINIMAL_ADGUARD_CONFIG}  ${field}: 5353\n`,
+        "/project/config.yaml"
+      ),
+      new RegExp(`adguard\\.${field} is not supported`, "u")
+    );
+  }
+
+  assert.throws(
+    () => parseProjectConfig(
+      `${COMMON_CONFIG}${MINIMAL_ADGUARD_CONFIG.replace(
+        "    upstreamDns: [https://cloudflare-dns.com/dns-query]",
+        "    upstreamDns: [https://cloudflare-dns.com/dns-query]\n    cache: {}"
+      )}`,
+      "/project/config.yaml"
+    ),
+    /adguard\.dns\.cache is not supported/u
   );
 });
 
@@ -424,12 +545,12 @@ test("rejects invalid project config values", () => {
     () =>
       parseProjectConfig(
         CONFIG.replace(
-          "upstreamDns: [https://cloudflare-dns.com/dns-query, tls://common.dot.dns.yandex.net]",
-          "upstreamDns: []"
+          "    upstreamDns: [https://cloudflare-dns.com/dns-query, tls://common.dot.dns.yandex.net]",
+          "    upstreamDns: []"
         ),
         "/project/config.yaml"
       ),
-    /adguard\.upstreamDns/u
+    /adguard\.dns\.upstreamDns/u
   );
   assert.throws(
     () =>
@@ -437,13 +558,13 @@ test("rejects invalid project config values", () => {
         CONFIG.replace("bootstrapDns: [1.1.1.1, 77.88.8.8]", "bootstrapDns: [1.1.1.1, 53]"),
         "/project/config.yaml"
       ),
-    /adguard\.bootstrapDns/u
+    /adguard\.dns\.bootstrapDns/u
   );
   assert.deepEqual(
     parseProjectConfig(
       CONFIG.replace("bootstrapDns: [1.1.1.1, 77.88.8.8]", "bootstrapDns: []"),
       "/project/config.yaml"
-    ).adguard.bootstrapDns,
+    ).adguard.dns.bootstrapDns,
     []
   );
   assert.throws(
@@ -452,7 +573,7 @@ test("rejects invalid project config values", () => {
         CONFIG.replace("upstreamMode: load_balance", "upstreamMode: random"),
         "/project/config.yaml"
       ),
-    /adguard\.upstreamMode/u
+    /adguard\.dns\.upstreamMode/u
   );
   assert.throws(
     () =>
@@ -465,10 +586,10 @@ test("rejects invalid project config values", () => {
   assert.throws(
     () =>
       parseProjectConfig(
-        CONFIG.replace("dnsPort: 5353", "dnsPort: 0"),
+        CONFIG.replace("port: 5353", "port: 0"),
         "/project/config.yaml"
       ),
-    /adguard\.dnsPort/u
+    /adguard\.dns\.port/u
   );
   assert.throws(
     () =>

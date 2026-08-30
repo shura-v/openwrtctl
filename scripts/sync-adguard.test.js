@@ -25,6 +25,10 @@ dns:
     enabled: true
     use_custom: true
     custom_ip: 192.0.2.2
+  cache_size: 1234
+  cache_ttl_min: 10
+  cache_ttl_max: 20
+  cache_optimistic: false
 filtering:
   rewrites:
     - domain: old.example
@@ -39,15 +43,25 @@ http:
 const NORMALIZED_ADGUARD_CONFIG = {
   querylogInterval: "6h",
   webPort: 8080,
-  dnsPort: 5353,
-  upstreamDns: ["tls://dns.example"],
-  bootstrapDns: [],
-  upstreamMode: "load_balance",
-  rateLimit: 0,
-  rateLimitSubnetLenIpv4: 24,
-  rateLimitSubnetLenIpv6: 56,
-  rateLimitWhitelist: [],
-  ednsClientSubnet: false
+  dns: {
+    port: 5353,
+    upstreamDns: ["tls://dns.example"],
+    bootstrapDns: [],
+    upstreamMode: "load_balance",
+    rateLimit: 0,
+    rateLimitSubnetLenIpv4: 24,
+    rateLimitSubnetLenIpv6: 56,
+    rateLimitWhitelist: [],
+    ednsClientSubnet: {
+      enabled: false,
+      useCustom: false,
+      customIp: ""
+    },
+    cacheSize: 4_194_304,
+    cacheTtlMin: 30,
+    cacheTtlMax: 60,
+    cacheOptimistic: true
+  }
 };
 
 test("rejects sync-adguard when its service section is omitted", async () => {
@@ -156,10 +170,42 @@ test("validates a complete settings-only candidate before remote apply", async (
     use_custom: false,
     custom_ip: ""
   });
+  assert.equal(candidate.dns.cache_size, 4_194_304);
+  assert.equal(candidate.dns.cache_ttl_min, 30);
+  assert.equal(candidate.dns.cache_ttl_max, 60);
+  assert.equal(candidate.dns.cache_optimistic, true);
   assert.deepEqual(candidate.filtering.rewrites, []);
   assert.deepEqual(candidate.user_rules, []);
   assert.equal(calls.filter(([type]) => type === "push").length, 1);
   assert.equal(calls.some(([, command]) => /adguardhome restart|uci set/u.test(command)), false);
+});
+
+test("uses the nested DNS port for readiness and dnsmasq", async (context) => {
+  const directory = await mkdtemp(path.join(tmpdir(), "sync-adguard-"));
+  const liveConfigPath = path.join(directory, "live.yaml");
+  const calls = [];
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  await writeFile(liveConfigPath, SOURCE_CONFIG);
+
+  const remote = {
+    localDirectory: directory,
+    config: {
+      openwrt: { remoteTmpDir: "/root/tmp" },
+      adguard: NORMALIZED_ADGUARD_CONFIG
+    },
+    pull: async (_source, destination) => copyFile(liveConfigPath, destination),
+    push: async (source, destination) => calls.push(["push", source, destination]),
+    exec: async (command) => calls.push(["exec", command])
+  };
+
+  await applyAdguardConfig(remote, { mode: "settingsOnly", validated: [] });
+
+  const configureCall = calls.find(
+    ([type, command]) => type === "exec" && /uci set dhcp\.@dnsmasq/u.test(command)
+  );
+  assert.ok(configureCall);
+  assert.match(configureCall[1], /managed_server='127\.0\.0\.1#5353'/u);
+  assert.match(configureCall[1], /wait_for_tcp_service adguardhome '5353'/u);
 });
 
 test("restores the AdGuard config when restart fails", async () => {

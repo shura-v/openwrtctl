@@ -31,25 +31,67 @@ openwrtctl init
 `init` создаёт `~/.config/openwrtctl/config.yaml` из шаблона, выставляет права
 `0600` и сохраняет существующий файл без изменений. Заполните endpoint и секции
 только тех сервисов, которыми должен управлять `openwrtctl`. В шаблоне уже задан
-`adguard.dnsPort: 5353`. В присутствующей секции `adguard` обязательны только
-`webPort`, `dnsPort` и непустой `upstreamDns`. Опциональные
-`querylogInterval` и `upstreamMode` по умолчанию равны `6h` и `load_balance`,
-а отсутствующий `bootstrapDns` записывается как пустой список.
-`rateLimit`, `rateLimitSubnetLenIpv4`, `rateLimitSubnetLenIpv6`,
-`rateLimitWhitelist` и `ednsClientSubnet` имеют defaults `0`, `24`, `56`, `[]`
-и `false` и записываются в AdGuard Home так:
+`adguard.dns.port: 5353`. В присутствующей секции `adguard` обязательны
+`webPort` и mapping `dns` с полями `port` и непустым `upstreamDns`.
+`querylogInterval` по умолчанию равен `6h`. Опциональные DNS-поля получают
+следующие defaults: `bootstrapDns: []`, `upstreamMode: load_balance`,
+`rateLimit: 0`, длины rate-limit подсетей `24` и `56`, пустой whitelist,
+выключенный EDNS Client Subnet, cache размером `4194304` байт, TTL `0`/`0` и
+выключенное optimistic caching.
 
 | Поле config | Поле AdGuard Home YAML |
 | --- | --- |
-| `rateLimit` | `dns.ratelimit` |
-| `rateLimitSubnetLenIpv4` | `dns.ratelimit_subnet_len_ipv4` |
-| `rateLimitSubnetLenIpv6` | `dns.ratelimit_subnet_len_ipv6` |
-| `rateLimitWhitelist` | `dns.ratelimit_whitelist` |
-| `ednsClientSubnet` | `dns.edns_client_subnet.enabled` |
+| `adguard.dns.port` | `dns.port` |
+| `adguard.dns.upstreamDns` | `dns.upstream_dns` |
+| `adguard.dns.bootstrapDns` | `dns.bootstrap_dns` |
+| `adguard.dns.upstreamMode` | `dns.upstream_mode` |
+| `adguard.dns.rateLimit` | `dns.ratelimit` |
+| `adguard.dns.rateLimitSubnetLenIpv4` | `dns.ratelimit_subnet_len_ipv4` |
+| `adguard.dns.rateLimitSubnetLenIpv6` | `dns.ratelimit_subnet_len_ipv6` |
+| `adguard.dns.rateLimitWhitelist` | `dns.ratelimit_whitelist` |
+| `adguard.dns.ednsClientSubnet.*` | `dns.edns_client_subnet.{enabled,use_custom,custom_ip}` |
+| `adguard.dns.cacheSize` | `dns.cache_size` |
+| `adguard.dns.cacheTtlMin` | `dns.cache_ttl_min` |
+| `adguard.dns.cacheTtlMax` | `dns.cache_ttl_max` |
+| `adguard.dns.cacheOptimistic` | `dns.cache_optimistic` |
 
-Булево поле `ednsClientSubnet` управляет всей EDNS Client Subnet mapping:
-custom-режим и custom IP сбрасываются. `nfqws2.test.httpsDomains` задаёт непустой
-список доменов для HTTPS-проверки стратегий.
+`cacheTtlMin` не может быть больше `cacheTtlMax`. При `useCustom: true` поле
+`customIp` должно содержать IPv4- или IPv6-адрес. `nfqws2.test.httpsDomains`
+задаёт непустой список доменов для HTTPS-проверки стратегий.
+
+### Переход на `adguard.dns`
+
+Плоские DNS-поля `adguard.dnsPort`, `adguard.upstreamDns`,
+`adguard.bootstrapDns`, `adguard.upstreamMode`, rate-limit и EDNS поля больше не
+принимаются. Перенесите их в `adguard.dns`, переименуйте `dnsPort` в `port` и
+замените булево значение EDNS на mapping:
+
+```yaml
+adguard:
+  webPort: 8080
+  querylogInterval: 6h
+  dns:
+    port: 5353
+    upstreamDns: [https://cloudflare-dns.com/dns-query]
+    bootstrapDns: []
+    upstreamMode: load_balance
+    rateLimit: 0
+    rateLimitSubnetLenIpv4: 24
+    rateLimitSubnetLenIpv6: 56
+    rateLimitWhitelist: []
+    ednsClientSubnet:
+      enabled: false
+      useCustom: false
+      customIp: ""
+    cacheSize: 4194304
+    cacheTtlMin: 0
+    cacheTtlMax: 0
+    cacheOptimistic: false
+```
+
+Старая форма завершается ошибкой локальной валидации до подготовки артефактов
+и изменений на роутере. `openwrtctl init` не перезаписывает существующий config,
+поэтому миграция выполняется вручную перед обновлением.
 
 Секции `singbox`, `adguard` и `nfqws2` опциональны. Каждая присутствующая секция
 полностью валидируется; `singbox` и `nfqws2` требуют свой artifact `path`, а
@@ -83,9 +125,10 @@ singbox:
 ```yaml
 adguard:
   webPort: 8080
-  dnsPort: 5353
-  upstreamDns:
-    - https://cloudflare-dns.com/dns-query
+  dns:
+    port: 5353
+    upstreamDns:
+      - https://cloudflare-dns.com/dns-query
 
 nfqws2:
   resources:
@@ -101,8 +144,9 @@ nfqws2:
 ```yaml
 adguard:
   webPort: 8080
-  dnsPort: 5353
-  upstreamDns: [https://cloudflare-dns.com/dns-query]
+  dns:
+    port: 5353
+    upstreamDns: [https://cloudflare-dns.com/dns-query]
   rewrites:
     path: artifacts/adguard-rewrites.yaml
     prepare:
@@ -114,8 +158,9 @@ adguard:
 ```yaml
 adguard:
   webPort: 8080
-  dnsPort: 5353
-  upstreamDns: [https://cloudflare-dns.com/dns-query]
+  dns:
+    port: 5353
+    upstreamDns: [https://cloudflare-dns.com/dns-query]
   userRules:
     path: artifacts/adguard-user-rules.yaml
     prepare:
@@ -155,8 +200,9 @@ openwrtctl sync
 
 После `install-adguard` завершите первичную настройку AdGuard Home вручную через
 его web-интерфейс и выберите DNS-порт `5353`, уже заданный в шаблоне.
-Последующий `sync-adguard` применяет `adguard.dnsPort` к `dns.port` AdGuard Home
-и направляет стандартный upstream `dnsmasq` на `127.0.0.1:<adguard.dnsPort>`.
+Последующий `sync-adguard` применяет `adguard.dns.port` к `dns.port` AdGuard Home
+и направляет стандартный upstream `dnsmasq` на
+`127.0.0.1:<adguard.dns.port>`.
 В режиме `adguard.rewrites` синхронизация заменяет `filtering.rewrites` и очищает
 `user_rules`. В режиме `adguard.userRules` она заменяет `user_rules` и очищает
 `filtering.rewrites`. Settings-only режим без обоих источников очищает оба

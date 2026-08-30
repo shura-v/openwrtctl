@@ -121,15 +121,7 @@ function validateAdguard(adguard, sourcePath) {
       "userRules",
       "querylogInterval",
       "webPort",
-      "dnsPort",
-      "upstreamDns",
-      "bootstrapDns",
-      "upstreamMode",
-      "rateLimit",
-      "rateLimitSubnetLenIpv4",
-      "rateLimitSubnetLenIpv6",
-      "rateLimitWhitelist",
-      "ednsClientSubnet"
+      "dns"
     ],
     `${sourcePath}: adguard`
   );
