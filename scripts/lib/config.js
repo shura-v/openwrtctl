@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { parse } from "yaml";
+import { parseAdguardSettings } from "./adguard-settings.js";
 
 export async function loadProjectConfig(configPath) {
   try {
@@ -123,67 +124,47 @@ function validateAdguard(adguard, sourcePath) {
       "dnsPort",
       "upstreamDns",
       "bootstrapDns",
-      "upstreamMode"
+      "upstreamMode",
+      "rateLimit",
+      "rateLimitSubnetLenIpv4",
+      "rateLimitSubnetLenIpv6",
+      "rateLimitWhitelist",
+      "ednsClientSubnet"
     ],
     `${sourcePath}: adguard`
   );
 
-  const querylogInterval = adguard.querylogInterval;
-  const webPort = adguard.webPort;
-  const dnsPort = adguard.dnsPort;
-  const upstreamDns = adguard.upstreamDns;
-  const bootstrapDns = adguard.bootstrapDns;
-  const hasBootstrapDns = Object.hasOwn(adguard, "bootstrapDns");
-  const upstreamMode = adguard.upstreamMode;
   const artifactFields = ["rewrites", "userRules"].filter((field) =>
     Object.hasOwn(adguard, field)
   );
 
-  if (artifactFields.length !== 1) {
+  if (artifactFields.length > 1) {
     throw new Error(
-      `${sourcePath}: adguard must contain exactly one of rewrites or userRules`
+      `${sourcePath}: adguard must contain at most one of rewrites or userRules`
     );
   }
 
   const artifactField = artifactFields[0];
-  const artifact = validateArtifactSource(
-    adguard[artifactField],
-    `${sourcePath}: adguard.${artifactField}`,
-    sourcePath
-  );
+  const artifact = artifactField === undefined
+    ? {}
+    : {
+      [artifactField]: validateArtifactSource(
+        adguard[artifactField],
+        `${sourcePath}: adguard.${artifactField}`,
+        sourcePath
+      )
+    };
 
-  if (typeof querylogInterval !== "string" || !/^[1-9]\d*(?:h|d)$/u.test(querylogInterval)) {
-    throw new Error(`${sourcePath}: adguard.querylogInterval must be a positive number of hours or days`);
-  }
-
-  validatePort(webPort, `${sourcePath}: adguard.webPort`);
-  validatePort(dnsPort, `${sourcePath}: adguard.dnsPort`);
-  const validatedUpstreamDns = validateStringList(
-    upstreamDns,
-    `${sourcePath}: adguard.upstreamDns`
-  );
-  const validatedBootstrapDns = hasBootstrapDns
-    ? validateStringList(
-      bootstrapDns,
-      `${sourcePath}: adguard.bootstrapDns`,
-      true
-    )
-    : undefined;
-
-  if (!["load_balance", "parallel", "fastest_addr"].includes(upstreamMode)) {
-    throw new Error(
-      `${sourcePath}: adguard.upstreamMode must be load_balance, parallel, or fastest_addr`
-    );
-  }
+  const settingsInput = { ...adguard };
+  delete settingsInput.rewrites;
+  delete settingsInput.userRules;
+  const settings = parseAdguardSettings(settingsInput, {
+    fieldPrefix: `${sourcePath}: adguard`
+  });
 
   return {
-    [artifactField]: artifact,
-    querylogInterval,
-    webPort,
-    dnsPort,
-    upstreamDns: validatedUpstreamDns,
-    ...(hasBootstrapDns ? { bootstrapDns: validatedBootstrapDns } : {}),
-    upstreamMode
+    ...artifact,
+    ...settings
   };
 }
 
@@ -345,20 +326,6 @@ function validatePortFilter(value, fieldName, allowRanges = false) {
 
     return normalized;
   });
-}
-
-function validateStringList(value, fieldName, allowEmpty = false) {
-  if (
-    !Array.isArray(value) ||
-    (!allowEmpty && value.length === 0) ||
-    value.some((entry) => typeof entry !== "string" || entry.trim().length === 0)
-  ) {
-    throw new Error(
-      `${fieldName} must be ${allowEmpty ? "a list" : "a non-empty list"} of non-empty strings`
-    );
-  }
-
-  return [...value];
 }
 
 function validateNameList(value, fieldName) {

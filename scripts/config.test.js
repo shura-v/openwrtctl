@@ -28,6 +28,18 @@ adguard:
   upstreamDns: [https://cloudflare-dns.com/dns-query, tls://common.dot.dns.yandex.net]
   bootstrapDns: [1.1.1.1, 77.88.8.8]
   upstreamMode: load_balance
+  rateLimit: 0
+  rateLimitSubnetLenIpv4: 24
+  rateLimitSubnetLenIpv6: 56
+  rateLimitWhitelist: []
+  ednsClientSubnet: false
+`;
+
+const MINIMAL_ADGUARD_CONFIG = `
+adguard:
+  webPort: 8080
+  dnsPort: 5353
+  upstreamDns: [https://cloudflare-dns.com/dns-query]
 `;
 
 const ADGUARD_USER_RULES_CONFIG = ADGUARD_CONFIG.replace(
@@ -93,7 +105,12 @@ test("parses the OpenWrt project config", () => {
         "tls://common.dot.dns.yandex.net"
       ],
       bootstrapDns: ["1.1.1.1", "77.88.8.8"],
-      upstreamMode: "load_balance"
+      upstreamMode: "load_balance",
+      rateLimit: 0,
+      rateLimitSubnetLenIpv4: 24,
+      rateLimitSubnetLenIpv6: 56,
+      rateLimitWhitelist: [],
+      ednsClientSubnet: false
     },
     singbox: {
       config: {
@@ -131,7 +148,59 @@ test("parses the OpenWrt project config", () => {
   });
 });
 
-test("accepts omitted and explicitly empty AdGuard bootstrap DNS", () => {
+test("defaults every optional AdGuard setting in settings-only mode", () => {
+  const parsed = parseProjectConfig(
+    `${COMMON_CONFIG}${MINIMAL_ADGUARD_CONFIG}`,
+    "/project/config.yaml"
+  );
+
+  assert.deepEqual(parsed.adguard, {
+    querylogInterval: "6h",
+    webPort: 8080,
+    dnsPort: 5353,
+    upstreamDns: ["https://cloudflare-dns.com/dns-query"],
+    bootstrapDns: [],
+    upstreamMode: "load_balance",
+    rateLimit: 0,
+    rateLimitSubnetLenIpv4: 24,
+    rateLimitSubnetLenIpv6: 56,
+    rateLimitWhitelist: [],
+    ednsClientSubnet: false
+  });
+  assert.equal(Object.hasOwn(parsed.adguard, "rewrites"), false);
+  assert.equal(Object.hasOwn(parsed.adguard, "userRules"), false);
+});
+
+test("preserves explicit optional AdGuard settings", () => {
+  const parsed = parseProjectConfig(
+    `${COMMON_CONFIG}${MINIMAL_ADGUARD_CONFIG}  querylogInterval: 2d
+  bootstrapDns: [9.9.9.9]
+  upstreamMode: parallel
+  rateLimit: 100
+  rateLimitSubnetLenIpv4: 32
+  rateLimitSubnetLenIpv6: 64
+  rateLimitWhitelist: [192.0.2.1, "2001:db8::/32"]
+  ednsClientSubnet: true
+`,
+    "/project/config.yaml"
+  );
+
+  assert.deepEqual(parsed.adguard, {
+    querylogInterval: "2d",
+    webPort: 8080,
+    dnsPort: 5353,
+    upstreamDns: ["https://cloudflare-dns.com/dns-query"],
+    bootstrapDns: ["9.9.9.9"],
+    upstreamMode: "parallel",
+    rateLimit: 100,
+    rateLimitSubnetLenIpv4: 32,
+    rateLimitSubnetLenIpv6: 64,
+    rateLimitWhitelist: ["192.0.2.1", "2001:db8::/32"],
+    ednsClientSubnet: true
+  });
+});
+
+test("accepts omitted and explicitly empty AdGuard DNS lists", () => {
   const withoutBootstrapDns = parseProjectConfig(
     `${COMMON_CONFIG}${ADGUARD_CONFIG.replace(
       "  bootstrapDns: [1.1.1.1, 77.88.8.8]\n",
@@ -147,8 +216,9 @@ test("accepts omitted and explicitly empty AdGuard bootstrap DNS", () => {
     "/project/config.yaml"
   );
 
-  assert.equal(Object.hasOwn(withoutBootstrapDns.adguard, "bootstrapDns"), false);
+  assert.deepEqual(withoutBootstrapDns.adguard.bootstrapDns, []);
   assert.deepEqual(withEmptyBootstrapDns.adguard.bootstrapDns, []);
+  assert.deepEqual(withoutBootstrapDns.adguard.rateLimitWhitelist, []);
 });
 
 test("accepts a singbox-only config and omits absent services", () => {
@@ -265,9 +335,31 @@ test("loads the example artifact sources and nfqws2 HTTPS test domain", async ()
   );
   assert.equal(parsed.singbox.config.prepare.cwd, PROJECT_DIRECTORY);
   assert.deepEqual(parsed.nfqws2.test.httpsDomains, ["www.youtube.com"]);
+  assert.deepEqual(
+    {
+      querylogInterval: parsed.adguard.querylogInterval,
+      bootstrapDns: parsed.adguard.bootstrapDns,
+      upstreamMode: parsed.adguard.upstreamMode,
+      rateLimit: parsed.adguard.rateLimit,
+      rateLimitSubnetLenIpv4: parsed.adguard.rateLimitSubnetLenIpv4,
+      rateLimitSubnetLenIpv6: parsed.adguard.rateLimitSubnetLenIpv6,
+      rateLimitWhitelist: parsed.adguard.rateLimitWhitelist,
+      ednsClientSubnet: parsed.adguard.ednsClientSubnet
+    },
+    {
+      querylogInterval: "6h",
+      bootstrapDns: [],
+      upstreamMode: "load_balance",
+      rateLimit: 0,
+      rateLimitSubnetLenIpv4: 24,
+      rateLimitSubnetLenIpv6: 56,
+      rateLimitWhitelist: [],
+      ednsClientSubnet: false
+    }
+  );
 });
 
-test("accepts exactly one AdGuard artifact source", () => {
+test("accepts at most one AdGuard artifact source", () => {
   const userRulesConfig = parseProjectConfig(
     `${COMMON_CONFIG}${ADGUARD_USER_RULES_CONFIG}`,
     "/project/config.yaml"
@@ -286,22 +378,48 @@ test("accepts exactly one AdGuard artifact source", () => {
         )}`,
         "/project/config.yaml"
       ),
-    /exactly one of rewrites or userRules/u
+    /at most one of rewrites or userRules/u
   );
-  assert.throws(
-    () =>
-      parseProjectConfig(
-        `${COMMON_CONFIG}${ADGUARD_CONFIG.replace(
-          /  rewrites:\n(?:    .*\n){4}/u,
-          ""
-        )}`,
-        "/project/config.yaml"
-      ),
-    /exactly one of rewrites or userRules/u
+});
+
+test("validates AdGuard rate-limit and EDNS settings", () => {
+  for (const [field, invalidValues] of [
+    ["rateLimit", ["-1", "1.5", "'1'"]],
+    ["rateLimitSubnetLenIpv4", ["-1", "33", "1.5"]],
+    ["rateLimitSubnetLenIpv6", ["-1", "129", "1.5"]],
+    ["rateLimitWhitelist", ["192.0.2.1", "[192.0.2.1, '']"]],
+    ["ednsClientSubnet", ["0", "'false'"]]
+  ]) {
+    for (const invalidValue of invalidValues) {
+      assert.throws(
+        () =>
+          parseProjectConfig(
+            `${COMMON_CONFIG}${MINIMAL_ADGUARD_CONFIG}  ${field}: ${invalidValue}\n`,
+            "/project/config.yaml"
+          ),
+        new RegExp(`adguard\\.${field}`, "u")
+      );
+    }
+  }
+
+  assert.deepEqual(
+    parseProjectConfig(
+      `${COMMON_CONFIG}${MINIMAL_ADGUARD_CONFIG}  rateLimitWhitelist: []\n`,
+      "/project/config.yaml"
+    ).adguard.rateLimitWhitelist,
+    []
   );
 });
 
 test("rejects invalid project config values", () => {
+  assert.throws(
+    () =>
+      parseProjectConfig(
+        CONFIG.replace("querylogInterval: 6h", "querylogInterval: 0h"),
+        "/project/config.yaml"
+      ),
+    /adguard\.querylogInterval/u
+  );
   assert.throws(
     () =>
       parseProjectConfig(

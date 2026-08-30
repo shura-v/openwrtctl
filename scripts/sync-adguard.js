@@ -17,7 +17,20 @@ export async function prepareAdguardArtifact({ config, configPath }) {
     throw new Error("sync-adguard requires an adguard section in the project config");
   }
 
-  const mode = config.adguard.userRules ? "userRules" : "rewrites";
+  const configuredModes = [
+    config.adguard.rewrites !== undefined && "rewrites",
+    config.adguard.userRules !== undefined && "userRules"
+  ].filter(Boolean);
+
+  if (configuredModes.length > 1) {
+    throw new Error("sync-adguard accepts at most one of adguard.rewrites or adguard.userRules");
+  }
+
+  if (configuredModes.length === 0) {
+    return { mode: "settingsOnly", validated: [] };
+  }
+
+  const [mode] = configuredModes;
   const artifact = await prepareLocalArtifact(config.adguard[mode], {
     configPath,
     fieldName: `adguard.${mode}`,
@@ -40,19 +53,32 @@ export async function applyAdguardConfig(remote, { mode, validated }) {
   await chmod(workDirectory, 0o700);
 
   try {
+    const rules = mode === "settingsOnly"
+      ? {}
+      : { [mode]: validated };
+
+    if (!["settingsOnly", "rewrites", "userRules"].includes(mode)) {
+      throw new Error(`Unsupported AdGuard rules mode: ${JSON.stringify(mode)}`);
+    }
+
     await remote.exec(`mkdir -p '${remote.config.openwrt.remoteTmpDir}'`);
     await remote.pull(adguardConfigPath, sourceConfigPath);
     const backupPath = await createLocalAdguardBackup(sourceConfigPath, backupsRoot);
     console.log(`Saved local AdGuard Home backup: ${backupPath}`);
     await generateAdguardConfig({
       sourcePath: sourceConfigPath,
-      [mode]: validated,
+      ...rules,
       querylogInterval: remote.config.adguard.querylogInterval,
-      webPort: String(remote.config.adguard.webPort),
-      dnsPort: String(remote.config.adguard.dnsPort),
+      webPort: remote.config.adguard.webPort,
+      dnsPort: remote.config.adguard.dnsPort,
       upstreamDns: remote.config.adguard.upstreamDns,
       bootstrapDns: remote.config.adguard.bootstrapDns,
       upstreamMode: remote.config.adguard.upstreamMode,
+      rateLimit: remote.config.adguard.rateLimit,
+      rateLimitSubnetLenIpv4: remote.config.adguard.rateLimitSubnetLenIpv4,
+      rateLimitSubnetLenIpv6: remote.config.adguard.rateLimitSubnetLenIpv6,
+      rateLimitWhitelist: remote.config.adguard.rateLimitWhitelist,
+      ednsClientSubnet: remote.config.adguard.ednsClientSubnet,
       outputPath: patchedConfigPath
     });
     await remote.push(patchedConfigPath, remoteStagedConfigPath);

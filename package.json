@@ -53,6 +53,7 @@
   },
   "dependencies": {
     "yaml": "^2.9.0",
+    "zod": "^4.5.4",
     "zx": "^8.8.5"
   },
   "devDependencies": {

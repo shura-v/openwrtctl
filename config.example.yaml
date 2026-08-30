@@ -4,7 +4,8 @@ openwrt:
   remoteTmpDir: /tmp/openwrtctl
 
 adguard:
-  # Укажи ровно один источник: rewrites или userRules.
+  # Опционально укажи не более одного источника: rewrites или userRules.
+  # Если оба отсутствуют, синхронизация очистит оба списка правил на роутере.
   rewrites:
     path: ./generated/adguard-rewrites.yaml
     prepare:
@@ -15,14 +16,20 @@ adguard:
   #   prepare:
   #     command: [openwrtctl-adguard-custom-rewrites, "{output}"]
   #     cwd: .
-  querylogInterval: 6h
   webPort: 8080
   dnsPort: 5353
   upstreamDns:
     - https://cloudflare-dns.com/dns-query
     - tls://common.dot.dns.yandex.net
-  # bootstrapDns: [1.1.1.1, 1.0.0.1, 77.88.8.8, 77.88.8.1]
+  # Все поля ниже опциональны; рядом указаны библиотечные defaults.
+  querylogInterval: 6h
+  bootstrapDns: []
   upstreamMode: load_balance
+  rateLimit: 0
+  rateLimitSubnetLenIpv4: 24
+  rateLimitSubnetLenIpv6: 56
+  rateLimitWhitelist: []
+  ednsClientSubnet: false
 
 singbox:
   config:
