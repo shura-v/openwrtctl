@@ -31,20 +31,77 @@ openwrtctl init
 `init` создаёт `~/.config/openwrtctl/config.yaml` из шаблона, выставляет права
 `0600` и сохраняет существующий файл без изменений. Заполните endpoint и секции
 только тех сервисов, которыми должен управлять `openwrtctl`. В шаблоне уже задан
-`adguard.dnsPort: 5353`; `adguard.dnsPort`, `adguard.upstreamDns` и
-`adguard.upstreamMode` управляют соответствующими полями `dns.*` в AdGuard Home.
-Опциональный `adguard.bootstrapDns` заменяет `dns.bootstrap_dns`; при отсутствии
-поля синхронизация записывает пустой список. `nfqws2.test.httpsDomains` задаёт
-непустой список доменов для HTTPS-проверки стратегий.
+`adguard.dns.port: 5353`. В присутствующей секции `adguard` обязательны
+`webPort` и mapping `dns` с полями `port` и непустым `upstreamDns`.
+`querylogInterval` по умолчанию равен `6h`. Опциональные DNS-поля получают
+следующие defaults: `bootstrapDns: []`, `upstreamMode: load_balance`,
+`rateLimit: 0`, длины rate-limit подсетей `24` и `56`, пустой whitelist,
+выключенный EDNS Client Subnet, cache размером `4194304` байт, TTL `0`/`0` и
+выключенное optimistic caching.
+
+| Поле config | Поле AdGuard Home YAML |
+| --- | --- |
+| `adguard.dns.port` | `dns.port` |
+| `adguard.dns.upstreamDns` | `dns.upstream_dns` |
+| `adguard.dns.bootstrapDns` | `dns.bootstrap_dns` |
+| `adguard.dns.upstreamMode` | `dns.upstream_mode` |
+| `adguard.dns.rateLimit` | `dns.ratelimit` |
+| `adguard.dns.rateLimitSubnetLenIpv4` | `dns.ratelimit_subnet_len_ipv4` |
+| `adguard.dns.rateLimitSubnetLenIpv6` | `dns.ratelimit_subnet_len_ipv6` |
+| `adguard.dns.rateLimitWhitelist` | `dns.ratelimit_whitelist` |
+| `adguard.dns.ednsClientSubnet.*` | `dns.edns_client_subnet.{enabled,use_custom,custom_ip}` |
+| `adguard.dns.cacheSize` | `dns.cache_size` |
+| `adguard.dns.cacheTtlMin` | `dns.cache_ttl_min` |
+| `adguard.dns.cacheTtlMax` | `dns.cache_ttl_max` |
+| `adguard.dns.cacheOptimistic` | `dns.cache_optimistic` |
+
+`cacheTtlMin` не может быть больше `cacheTtlMax`. При `useCustom: true` поле
+`customIp` должно содержать IPv4- или IPv6-адрес. `nfqws2.test.httpsDomains`
+задаёт непустой список доменов для HTTPS-проверки стратегий.
+
+### Переход на `adguard.dns`
+
+Плоские DNS-поля `adguard.dnsPort`, `adguard.upstreamDns`,
+`adguard.bootstrapDns`, `adguard.upstreamMode`, rate-limit и EDNS поля больше не
+принимаются. Перенесите их в `adguard.dns`, переименуйте `dnsPort` в `port` и
+замените булево значение EDNS на mapping:
+
+```yaml
+adguard:
+  webPort: 8080
+  querylogInterval: 6h
+  dns:
+    port: 5353
+    upstreamDns: [https://cloudflare-dns.com/dns-query]
+    bootstrapDns: []
+    upstreamMode: load_balance
+    rateLimit: 0
+    rateLimitSubnetLenIpv4: 24
+    rateLimitSubnetLenIpv6: 56
+    rateLimitWhitelist: []
+    ednsClientSubnet:
+      enabled: false
+      useCustom: false
+      customIp: ""
+    cacheSize: 4194304
+    cacheTtlMin: 0
+    cacheTtlMax: 0
+    cacheOptimistic: false
+```
+
+Старая форма завершается ошибкой локальной валидации до подготовки артефактов
+и изменений на роутере. `openwrtctl init` не перезаписывает существующий config,
+поэтому миграция выполняется вручную перед обновлением.
 
 Секции `singbox`, `adguard` и `nfqws2` опциональны. Каждая присутствующая секция
-полностью валидируется и требует свой artifact `path`; service-команда для
-sync или другая команда, которой нужны её настройки, завершается явной ошибкой
-при отсутствии секции. Опциональный `prepare.command`
-задаётся argv-массивом и должен содержать ровно один отдельный аргумент
-`{output}`. Опциональный `prepare.cwd` задаёт рабочий каталог; по умолчанию
-используется каталог выбранного config-файла. Относительные пути разрешаются от
-этого каталога, `~` поддерживается явно.
+полностью валидируется; `singbox` и `nfqws2` требуют свой artifact `path`, а
+`adguard` может работать только с настройками без artifact. Service-команда для
+sync или другая команда, которой нужны настройки отсутствующей секции,
+завершается явной ошибкой. Опциональный `prepare.command` задаётся argv-массивом
+и должен содержать ровно один отдельный аргумент `{output}`. Опциональный
+`prepare.cwd` задаёт рабочий каталог; по умолчанию используется каталог
+выбранного config-файла. Относительные пути разрешаются от этого каталога, `~`
+поддерживается явно.
 
 ```yaml
 openwrt:
@@ -67,10 +124,11 @@ singbox:
 
 ```yaml
 adguard:
-  rewrites:
-    path: artifacts/adguard-rewrites.yaml
-    prepare:
-      command: [openwrtctl-adguard-rewrites, router, "{output}"]
+  webPort: 8080
+  dns:
+    port: 5353
+    upstreamDns:
+      - https://cloudflare-dns.com/dns-query
 
 nfqws2:
   resources:
@@ -79,11 +137,30 @@ nfqws2:
       command: [openwrtctl-nfqws2-resources, router, "{output}"]
 ```
 
-В секции `adguard` укажите ровно один источник правил. Для пользовательских
-фильтров AdGuard Home замените `rewrites` на `userRules`:
+Это settings-only режим AdGuard Home: источник правил не обязателен. Для
+управления rewrite-правилами добавьте не более одного из `rewrites` или
+`userRules`:
 
 ```yaml
 adguard:
+  webPort: 8080
+  dns:
+    port: 5353
+    upstreamDns: [https://cloudflare-dns.com/dns-query]
+  rewrites:
+    path: artifacts/adguard-rewrites.yaml
+    prepare:
+      command: [openwrtctl-adguard-rewrites, router, "{output}"]
+```
+
+Для пользовательских фильтров AdGuard Home замените `rewrites` на `userRules`:
+
+```yaml
+adguard:
+  webPort: 8080
+  dns:
+    port: 5353
+    upstreamDns: [https://cloudflare-dns.com/dns-query]
   userRules:
     path: artifacts/adguard-user-rules.yaml
     prepare:
@@ -123,11 +200,14 @@ openwrtctl sync
 
 После `install-adguard` завершите первичную настройку AdGuard Home вручную через
 его web-интерфейс и выберите DNS-порт `5353`, уже заданный в шаблоне.
-Последующий `sync-adguard` применяет `adguard.dnsPort` к `dns.port` AdGuard Home
-и направляет стандартный upstream `dnsmasq` на `127.0.0.1:<adguard.dnsPort>`.
+Последующий `sync-adguard` применяет `adguard.dns.port` к `dns.port` AdGuard Home
+и направляет стандартный upstream `dnsmasq` на
+`127.0.0.1:<adguard.dns.port>`.
 В режиме `adguard.rewrites` синхронизация заменяет `filtering.rewrites` и очищает
 `user_rules`. В режиме `adguard.userRules` она заменяет `user_rules` и очищает
-`filtering.rewrites`, поэтому ручные и обычные rewrite-правила не смешиваются.
+`filtering.rewrites`. Settings-only режим без обоих источников очищает оба
+списка, поэтому результат не зависит от правил, оставленных предыдущей
+синхронизацией. Ручные правила в управляемых списках при этом не сохраняются.
 Если в `dnsmasq` уже задан пользовательский upstream, синхронизация завершится
 ошибкой и сохранит его без изменений. `uninstall-adguard` восстанавливает
 стандартный upstream OpenWrt до остановки AdGuard Home.

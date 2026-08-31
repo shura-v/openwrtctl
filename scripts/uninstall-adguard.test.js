@@ -15,3 +15,18 @@ test("rejects uninstall-adguard when its service section is omitted", async () =
 
   assert.deepEqual(calls, []);
 });
+
+test("uses the nested AdGuard DNS port during uninstall", async () => {
+  const calls = [];
+
+  await uninstallAdguard({
+    config: {
+      openwrt: { remoteTmpDir: "/root/tmp" },
+      adguard: { dns: { port: 5353 } }
+    },
+    exec: async (command) => calls.push(command)
+  });
+
+  assert.equal(calls.length, 1);
+  assert.match(calls[0], /managed_server='127\.0\.0\.1#5353'/u);
+});
