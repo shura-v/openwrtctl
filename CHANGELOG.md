@@ -1,5 +1,16 @@
 # openwrtctl
 
+## 1.1.0
+
+### Minor Changes
+
+- bbc9a56: Добавлен взаимоисключающий источник `adguard.userRules` для управления пользовательскими правилами AdGuard Home.
+
+### Patch Changes
+
+- bbc9a56: Добавлен вывод процессора роутера в `openwrtctl doctor`.
+- bbc9a56: Поле `adguard.bootstrapDns` сделано опциональным: при его отсутствии bootstrap DNS AdGuard Home очищаются.
+
 ## 1.0.0
 
 ### Major Changes
