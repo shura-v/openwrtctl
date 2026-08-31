@@ -25,8 +25,12 @@
 
 ```sh
 npm install -g openwrtctl
+openwrtctl --version
 openwrtctl init
 ```
+
+`openwrtctl --version` выводит версию установленного npm-пакета. Запуск без
+аргументов показывает ту же версию над справкой.
 
 `init` создаёт `~/.config/openwrtctl/config.yaml` из шаблона, выставляет права
 `0600` и сохраняет существующий файл без изменений. Заполните endpoint и секции

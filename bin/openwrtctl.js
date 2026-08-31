@@ -3,6 +3,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { $ } from "zx";
+import packageMetadata from "../package.json" with { type: "json" };
 import { CONFIG_PATH, USER_HOME } from "../scripts/lib/config-path.js";
 
 const rootDirectory = path.resolve(
@@ -45,6 +46,11 @@ async function main() {
 
   if (arguments_.includes("--help") || arguments_.includes("-h")) {
     printHelp();
+    return;
+  }
+
+  if (arguments_.includes("--version")) {
+    printVersion();
     return;
   }
 
@@ -96,7 +102,9 @@ function takeConfigPath(arguments_) {
 }
 
 function printHelp() {
-  console.log(`Usage: openwrtctl [--config <path>] <command> [arguments]
+  console.log(`openwrtctl ${packageMetadata.version}
+
+Usage: openwrtctl [--config <path>] <command> [arguments]
 
 Commands:
   init                doctor              backup              restore             prepare-router
@@ -106,4 +114,8 @@ Commands:
   test-nfqws2         test-nfqws2-results
   sync
 `);
+}
+
+function printVersion() {
+  console.log(packageMetadata.version);
 }
