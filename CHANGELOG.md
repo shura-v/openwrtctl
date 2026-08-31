@@ -1,5 +1,11 @@
 # openwrtctl
 
+## 2.0.1
+
+### Patch Changes
+
+- 4a0d77c: Add `openwrtctl --version` and show the package version above no-argument help.
+
 ## 2.0.0
 
 ### Major Changes
