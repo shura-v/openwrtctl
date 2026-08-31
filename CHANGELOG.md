@@ -1,5 +1,18 @@
 # openwrtctl
 
+## 2.0.0
+
+### Major Changes
+
+- 258b32b: DNS-настройки AdGuard перенесены в обязательный mapping `adguard.dns`: `dnsPort` переименован в `dns.port`, остальные DNS-поля вложены без compatibility aliases.
+  Добавлено управление cache и полной EDNS Client Subnet mapping с общей валидацией project config, генератора и standalone CLI.
+
+### Patch Changes
+
+- 6d8aeb2: Добавлена settings-only синхронизация AdGuard Home без обязательного источника правил, defaults для `querylogInterval` и `upstreamMode`, а также управление rate-limit и EDNS Client Subnet настройками.
+  Единая Zod-схема теперь валидирует эти настройки в project config, генераторе и standalone CLI до записи AdGuard Home YAML.
+- bbc9a56: Поле `adguard.dns.bootstrapDns` сделано опциональным: при его отсутствии bootstrap DNS AdGuard Home очищаются.
+
 ## 1.1.0
 
 ### Minor Changes
