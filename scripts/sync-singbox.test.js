@@ -56,7 +56,8 @@ test("uploads the validated sing-box snapshot without rereading its configured p
 
   await applySingboxConfig(remote, artifact);
 
-  assert.deepEqual(calls[0], ["push", snapshot, "/root/tmp/sing-box.json"]);
-  assert.match(calls[1][1], /sing-box check/u);
-  assert.match(calls[2][1], /mv -f "\$candidate" '\/etc\/sing-box\/config\.json'/u);
+  assert.deepEqual(calls[0], ["exec", "mkdir -p '/root/tmp'"]);
+  assert.deepEqual(calls[1], ["push", snapshot, "/root/tmp/sing-box.json"]);
+  assert.match(calls[2][1], /sing-box check/u);
+  assert.match(calls[3][1], /mv -f "\$candidate" '\/etc\/sing-box\/config\.json'/u);
 });

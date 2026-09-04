@@ -50,6 +50,7 @@ export async function applySingboxConfig(remote, { snapshot }) {
 
   try {
     await writeFile(snapshotPath, snapshot, { mode: 0o600 });
+    await remote.exec(`mkdir -p '${remote.config.openwrt.remoteTmpDir}'`);
     await remote.push(snapshotPath, stagedConfigPath);
     await remote.exec(`/usr/bin/sing-box check -c '${stagedConfigPath}'`);
     await applyRemoteSingBoxConfig(remote, stagedConfigPath);
