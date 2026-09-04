@@ -1,5 +1,11 @@
 # openwrtctl
 
+## 2.0.2
+
+### Patch Changes
+
+- fa93bc6: Create the configured remote temporary directory before uploading a sing-box configuration.
+
 ## 2.0.1
 
 ### Patch Changes
