@@ -1,5 +1,11 @@
 # openwrtctl
 
+## 2.0.3
+
+### Patch Changes
+
+- 61df3cd: Stop saving timestamped AdGuard Home backups during sync and keep rollback files temporary.
+
 ## 2.0.2
 
 ### Patch Changes
