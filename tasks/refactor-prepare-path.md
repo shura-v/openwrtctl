@@ -83,7 +83,7 @@ Shell-строки и multiline `preSync` не поддерживаются. Д�
   answer: 192.0.2.10
 ```
 
-`openwrtctl` загружает текущий `AdGuardHome.yaml` с роутера, заменяет только `filtering.rewrites`, сохраняет остальные управляемые настройки и runtime-поля, затем выполняет существующие backup, remote validation и rollback.
+`openwrtctl` загружает текущий `AdGuardHome.yaml` с роутера во временный rollback-файл, заменяет только `filtering.rewrites`, сохраняет остальные управляемые настройки и runtime-поля, затем выполняет remote validation и rollback при ошибке. Временный файл удаляется после sync.
 
 ### nfqws2
 

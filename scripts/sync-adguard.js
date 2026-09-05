@@ -6,7 +6,6 @@ import {
   parseAdguardRewrites,
   parseAdguardUserRules
 } from "./adguard-config.js";
-import { createLocalAdguardBackup } from "./lib/adguard-backup.js";
 import { buildConfigureDnsmasqCommand } from "./lib/adguard-lifecycle.js";
 import { applyRemoteConfig, restoreRemoteConfig } from "./lib/adguard-remote-config.js";
 import { prepareLocalArtifact } from "./lib/local-artifact.js";
@@ -44,9 +43,8 @@ export async function prepareAdguardArtifact({ config, configPath }) {
 export async function applyAdguardConfig(remote, { mode, validated }) {
   const adguardConfigPath = "/etc/adguardhome/adguardhome.yaml";
   const workDirectory = path.join(remote.localDirectory, ".work/adguard");
-  const sourceConfigPath = path.join(workDirectory, "current.yaml");
+  const rollbackPath = path.join(workDirectory, "current.yaml");
   const patchedConfigPath = path.join(workDirectory, "patched.yaml");
-  const backupsRoot = path.join(remote.localDirectory, ".backups");
   const remoteStagedConfigPath = `${remote.config.openwrt.remoteTmpDir}/adguardhome.yaml`;
 
   await mkdir(workDirectory, { recursive: true });
@@ -62,11 +60,9 @@ export async function applyAdguardConfig(remote, { mode, validated }) {
     }
 
     await remote.exec(`mkdir -p '${remote.config.openwrt.remoteTmpDir}'`);
-    await remote.pull(adguardConfigPath, sourceConfigPath);
-    const backupPath = await createLocalAdguardBackup(sourceConfigPath, backupsRoot);
-    console.log(`Saved local AdGuard Home backup: ${backupPath}`);
+    await remote.pull(adguardConfigPath, rollbackPath);
     await generateAdguardConfig({
-      sourcePath: sourceConfigPath,
+      sourcePath: rollbackPath,
       ...rules,
       querylogInterval: remote.config.adguard.querylogInterval,
       webPort: remote.config.adguard.webPort,
@@ -78,7 +74,7 @@ export async function applyAdguardConfig(remote, { mode, validated }) {
 
     await applyAdguardConfigTransaction({
       remote,
-      backupPath,
+      rollbackPath,
       remoteStagedConfigPath,
       adguardConfigPath,
       configureDnsmasqCommand: buildConfigureDnsmasqCommand(
@@ -88,7 +84,7 @@ export async function applyAdguardConfig(remote, { mode, validated }) {
     });
   } finally {
     await Promise.all(
-      [sourceConfigPath, patchedConfigPath].map((filePath) => rm(filePath, { force: true }))
+      [rollbackPath, patchedConfigPath].map((filePath) => rm(filePath, { force: true }))
     );
   }
 }
@@ -101,7 +97,7 @@ export async function main() {
 
 export async function applyAdguardConfigTransaction({
   remote,
-  backupPath,
+  rollbackPath,
   remoteStagedConfigPath,
   adguardConfigPath,
   configureDnsmasqCommand
@@ -112,7 +108,7 @@ export async function applyAdguardConfigTransaction({
   } catch (applyError) {
     await restoreRemoteConfig(
       remote,
-      backupPath,
+      rollbackPath,
       remoteStagedConfigPath,
       adguardConfigPath,
       applyError

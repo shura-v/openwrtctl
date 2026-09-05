@@ -94,12 +94,20 @@ The system SHALL write normalized `adguard.dns` settings to `dns.port`, `dns.ups
 - **THEN** the resulting `dns.bootstrap_dns` is an empty list
 
 ### Requirement: Safe remote application
-The system SHALL validate the complete candidate with `AdGuardHome --check-config`, retain the existing local backup and transactional rollback behavior, restart AdGuard Home, require readiness on the configured DNS port, then configure dnsmasq to forward to that listener. A validation, restart, or readiness failure SHALL NOT leave dnsmasq pointing at an unavailable new candidate.
+The system SHALL pull the current AdGuard Home config to the temporary `.work/adguard/current.yaml` rollback file, validate the complete candidate with `AdGuardHome --check-config`, restart AdGuard Home, require readiness on the configured DNS port, then configure dnsmasq to forward to that listener. Synchronization SHALL NOT create persistent timestamped AdGuard Home backups under `.backups/adguard`, and SHALL remove the local rollback and patched work files after both success and failure. A restart or readiness failure SHALL restore the previous config from the temporary rollback file before cleanup. A validation, restart, or readiness failure SHALL NOT leave dnsmasq pointing at an unavailable new candidate.
 
 #### Scenario: Candidate passes validation and readiness
 - **WHEN** the generated candidate is valid and AdGuard Home becomes ready on the configured DNS port
 - **THEN** synchronization installs the candidate and configures dnsmasq to forward to it
 
-#### Scenario: Candidate fails after backup
-- **WHEN** candidate validation, restart, or readiness fails
-- **THEN** synchronization restores the previous managed state according to the existing transaction contract and returns an error
+#### Scenario: Temporary rollback files are cleaned after success
+- **WHEN** the candidate is applied and AdGuard Home becomes ready
+- **THEN** synchronization removes `.work/adguard/current.yaml` and the patched work file without creating `.backups/adguard`
+
+#### Scenario: Candidate validation fails
+- **WHEN** candidate validation fails before remote apply
+- **THEN** the live config remains unchanged, synchronization removes the local work files without creating `.backups/adguard`, and returns an error
+
+#### Scenario: Apply fails after remote replacement starts
+- **WHEN** restart or readiness fails
+- **THEN** synchronization restores the previous managed state from `.work/adguard/current.yaml`, removes the local work files without creating `.backups/adguard`, and returns an error

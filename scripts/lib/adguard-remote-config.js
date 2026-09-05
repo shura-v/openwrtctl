@@ -14,20 +14,24 @@ rm -f '${stagedPath}'
 `);
 }
 
-export async function restoreRemoteConfig(remote, backupPath, stagedPath, configPath, applyError) {
-  console.error(`AdGuard Home apply failed; restoring local backup: ${backupPath}`);
+export async function restoreRemoteConfig(remote, rollbackPath, stagedPath, configPath, applyError) {
+  console.error(
+    `AdGuard Home apply failed; restoring previous configuration from temporary rollback file: ${rollbackPath}`
+  );
 
   try {
-    await remote.push(backupPath, stagedPath);
+    await remote.push(rollbackPath, stagedPath);
     await remote.exec(`AdGuardHome --check-config -c '${stagedPath}'`);
     await applyRemoteConfig(remote, stagedPath, configPath);
   } catch (restoreError) {
     throw new Error(
-      `apply failed (${errorMessage(applyError)}); restore from ${backupPath} also failed: ${errorMessage(restoreError)}`
+      `apply failed (${errorMessage(applyError)}); restore from temporary rollback file ${rollbackPath} also failed: ${errorMessage(restoreError)}`
     );
   }
 
-  throw new Error(`apply failed and ${backupPath} was restored: ${errorMessage(applyError)}`);
+  throw new Error(
+    `apply failed and previous configuration from temporary rollback file ${rollbackPath} was restored: ${errorMessage(applyError)}`
+  );
 }
 
 function errorMessage(error) {

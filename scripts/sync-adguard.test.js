@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -63,6 +63,18 @@ const NORMALIZED_ADGUARD_CONFIG = {
     cacheOptimistic: true
   }
 };
+
+async function assertAdguardWorkCleaned(directory) {
+  const removedPaths = [
+    path.join(directory, ".work/adguard/current.yaml"),
+    path.join(directory, ".work/adguard/patched.yaml"),
+    path.join(directory, ".backups/adguard")
+  ];
+
+  await Promise.all(
+    removedPaths.map((filePath) => assert.rejects(stat(filePath), { code: "ENOENT" }))
+  );
+}
 
 test("rejects sync-adguard when its service section is omitted", async () => {
   await assert.rejects(
@@ -178,6 +190,7 @@ test("validates a complete settings-only candidate before remote apply", async (
   assert.deepEqual(candidate.user_rules, []);
   assert.equal(calls.filter(([type]) => type === "push").length, 1);
   assert.equal(calls.some(([, command]) => /adguardhome restart|uci set/u.test(command)), false);
+  await assertAdguardWorkCleaned(directory);
 });
 
 test("uses the nested DNS port for readiness and dnsmasq", async (context) => {
@@ -206,6 +219,59 @@ test("uses the nested DNS port for readiness and dnsmasq", async (context) => {
   assert.ok(configureCall);
   assert.match(configureCall[1], /managed_server='127\.0\.0\.1#5353'/u);
   assert.match(configureCall[1], /wait_for_tcp_service adguardhome '5353'/u);
+  await assertAdguardWorkCleaned(directory);
+});
+
+test("uses the temporary current config for rollback and removes it after failure", async (context) => {
+  const directory = await mkdtemp(path.join(tmpdir(), "sync-adguard-"));
+  const liveConfigPath = path.join(directory, "live.yaml");
+  const calls = [];
+  let applyAttempts = 0;
+  let rollbackConfig;
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  await writeFile(liveConfigPath, SOURCE_CONFIG);
+
+  const remote = {
+    localDirectory: directory,
+    config: {
+      openwrt: { remoteTmpDir: "/root/tmp" },
+      adguard: NORMALIZED_ADGUARD_CONFIG
+    },
+    pull: async (_source, destination) => copyFile(liveConfigPath, destination),
+    push: async (source, destination) => {
+      calls.push(["push", source, destination]);
+      if (source.endsWith("/.work/adguard/current.yaml")) {
+        rollbackConfig = await readFile(source, "utf8");
+      }
+    },
+    exec: async (command) => {
+      calls.push(["exec", command]);
+
+      if (/\/etc\/init\.d\/adguardhome restart/u.test(command)) {
+        applyAttempts += 1;
+        if (applyAttempts === 1) {
+          throw new Error("AdGuard Home restart failed");
+        }
+      }
+    }
+  };
+
+  await assert.rejects(
+    applyAdguardConfig(remote, { mode: "settingsOnly", validated: [] }),
+    /temporary rollback file .*current\.yaml was restored: AdGuard Home restart failed/u
+  );
+
+  const rollbackPush = calls.find(
+    ([type, source]) => type === "push" && source.endsWith("/.work/adguard/current.yaml")
+  );
+  assert.deepEqual(rollbackPush, [
+    "push",
+    path.join(directory, ".work/adguard/current.yaml"),
+    "/root/tmp/adguardhome.yaml"
+  ]);
+  assert.equal(rollbackConfig, SOURCE_CONFIG);
+  assert.equal(applyAttempts, 2);
+  await assertAdguardWorkCleaned(directory);
 });
 
 test("restores the AdGuard config when restart fails", async () => {
@@ -226,17 +292,17 @@ test("restores the AdGuard config when restart fails", async () => {
   await assert.rejects(
     applyAdguardConfigTransaction({
       remote,
-      backupPath: "/local/.backups/adguard/previous.yaml",
+      rollbackPath: "/local/.work/adguard/current.yaml",
       remoteStagedConfigPath: "/root/tmp/adguardhome.yaml",
       adguardConfigPath: "/etc/adguardhome/adguardhome.yaml",
       configureDnsmasqCommand: buildConfigureDnsmasqCommand("/root/tmp", 5353)
     }),
-    /previous\.yaml was restored: AdGuard Home restart failed/u
+    /temporary rollback file .*current\.yaml was restored: AdGuard Home restart failed/u
   );
 
   assert.deepEqual(calls[1], [
     "push",
-    "/local/.backups/adguard/previous.yaml",
+    "/local/.work/adguard/current.yaml",
     "/root/tmp/adguardhome.yaml"
   ]);
   assert.match(calls[2][1], /AdGuardHome --check-config/u);
@@ -262,12 +328,12 @@ test("restores the AdGuard config when readiness fails after restart", async () 
   await assert.rejects(
     applyAdguardConfigTransaction({
       remote,
-      backupPath: "/local/.backups/adguard/previous.yaml",
+      rollbackPath: "/local/.work/adguard/current.yaml",
       remoteStagedConfigPath: "/root/tmp/adguardhome.yaml",
       adguardConfigPath: "/etc/adguardhome/adguardhome.yaml",
       configureDnsmasqCommand: buildConfigureDnsmasqCommand("/root/tmp", 5353)
     }),
-    /previous\.yaml was restored: AdGuard Home readiness failed/u
+    /temporary rollback file .*current\.yaml was restored: AdGuard Home readiness failed/u
   );
 
   assert.match(calls[0][1], /\/etc\/init\.d\/adguardhome restart/u);
@@ -279,7 +345,7 @@ test("restores the AdGuard config when readiness fails after restart", async () 
   );
   assert.deepEqual(calls[2], [
     "push",
-    "/local/.backups/adguard/previous.yaml",
+    "/local/.work/adguard/current.yaml",
     "/root/tmp/adguardhome.yaml"
   ]);
   assert.match(calls[3][1], /AdGuardHome --check-config/u);

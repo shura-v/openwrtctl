@@ -19,7 +19,7 @@ test("atomically replaces the remote AdGuard Home config", async () => {
   assert.doesNotMatch(commands[0], /> '\/etc\/adguardhome\/adguardhome\.yaml'/u);
 });
 
-test("restores a local backup after a failed remote apply", async () => {
+test("restores a temporary rollback file after a failed remote apply", async () => {
   const calls = [];
   const remote = {
     push: async (source, destination) => calls.push(["push", source, destination]),
@@ -29,16 +29,16 @@ test("restores a local backup after a failed remote apply", async () => {
   await assert.rejects(
     restoreRemoteConfig(
       remote,
-      "/local/.backups/adguard/previous.yaml",
+      "/local/.work/adguard/current.yaml",
       "/root/tmp/adguardhome.yaml",
       "/etc/adguardhome/adguardhome.yaml",
       new Error("restart failed")
     ),
-    /previous\.yaml was restored: restart failed/u
+    /temporary rollback file .*current\.yaml was restored: restart failed/u
   );
   assert.deepEqual(calls[0], [
     "push",
-    "/local/.backups/adguard/previous.yaml",
+    "/local/.work/adguard/current.yaml",
     "/root/tmp/adguardhome.yaml"
   ]);
   assert.match(calls[2][1], /mv -f "\$candidate"/u);
