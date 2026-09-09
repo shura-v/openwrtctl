@@ -6,7 +6,8 @@
 
 `openwrtctl` управляет домашним OpenWrt-роутером с локального компьютера:
 
-- подготавливает OpenWrt и блокирует QUIC;
+- подготавливает OpenWrt;
+- управляет блокировкой QUIC отдельными ручными командами;
 - устанавливает, обновляет, синхронизирует и удаляет AdGuard Home, sing-box и
   nfqws2;
 - создаёт и восстанавливает стандартные OpenWrt backup-архивы;
@@ -201,6 +202,18 @@ openwrtctl install-singbox
 openwrtctl install-nfqws2
 openwrtctl sync
 ```
+
+Блокировка QUIC настраивается вручную. `prepare-router` (алиас `prepare`)
+сохраняет текущую настройку QUIC и не включает блокировку автоматически.
+
+```sh
+openwrtctl disable-quic
+openwrtctl enable-quic
+```
+
+`disable-quic` устанавливает `/etc/nftables.d/10-block-quic.nft` и блокирует
+UDP/443 для клиентов LAN и самого роутера. `enable-quic` удаляет это правило
+блокировки. Обе команды применяют изменение через firewall4.
 
 После `install-adguard` завершите первичную настройку AdGuard Home вручную через
 его web-интерфейс и выберите DNS-порт `5353`, уже заданный в шаблоне.

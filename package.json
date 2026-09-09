@@ -30,6 +30,8 @@
     "doctor": "node ./bin/openwrtctl.js doctor",
     "backup": "node ./bin/openwrtctl.js backup",
     "prepare-router": "node ./bin/openwrtctl.js prepare-router",
+    "disable-quic": "node ./bin/openwrtctl.js disable-quic",
+    "enable-quic": "node ./bin/openwrtctl.js enable-quic",
     "restore": "node ./bin/openwrtctl.js restore",
     "install-adguard": "node ./bin/openwrtctl.js install-adguard",
     "uninstall-adguard": "node ./bin/openwrtctl.js uninstall-adguard",

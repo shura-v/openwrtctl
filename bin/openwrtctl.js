@@ -17,6 +17,8 @@ const COMMANDS = new Map([
   ["backup", ["backup.js"]],
   ["prepare", ["prepare.js"]],
   ["prepare-router", ["prepare.js"]],
+  ["disable-quic", ["disable-quic.js"]],
+  ["enable-quic", ["enable-quic.js"]],
   ["restore", ["restore.js"]],
   ["install-adguard", ["install-adguard.js"]],
   ["uninstall-adguard", ["uninstall-adguard.js"]],
@@ -108,6 +110,7 @@ Usage: openwrtctl [--config <path>] <command> [arguments]
 
 Commands:
   init                doctor              backup              restore             prepare-router
+  disable-quic        enable-quic
   install-adguard     uninstall-adguard     sync-adguard
   install-singbox     disable-singbox       update-singbox        uninstall-singbox     sync-singbox
   install-nfqws2      disable-nfqws2        update-nfqws2         uninstall-nfqws2      sync-nfqws2

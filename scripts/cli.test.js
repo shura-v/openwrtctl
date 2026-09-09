@@ -18,6 +18,8 @@ test("exposes the complete openwrtctl command surface", async () => {
     "init",
     "doctor",
     "prepare-router",
+    "disable-quic",
+    "enable-quic",
     "backup",
     "restore",
     "install-adguard",
